@@ -1,0 +1,15 @@
+# Las dependencias se instalan desde requirements.txt y requirements-dev.txt.
+# Este archivo solo guarda la configuración de herramientas.
+
+[tool.black]
+line-length = 88
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+# E/W: pycodestyle, F: pyflakes, I: orden de imports (reemplaza isort)
+select = ["E", "F", "I", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

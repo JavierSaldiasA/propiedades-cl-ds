@@ -1,0 +1,27 @@
+# Scraping — después de instalar, correr: playwright install chromium
+playwright
+
+# Datos / ETL
+pandas
+pyarrow
+
+# Base de datos: Supabase Postgres con queries directas (ver contexto/decisiones.md)
+psycopg[binary]
+
+# API
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+
+# Modelos
+scikit-learn
+lightgbm
+xgboost
+shap
+
+# Frontend
+streamlit
+
+# Cliente HTTP (Streamlit → API, y tests de endpoints con TestClient)
+httpx
