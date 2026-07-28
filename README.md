@@ -122,7 +122,7 @@ validación cruzada y, si el volumen lo permite, separación temporal
 
 ```bash
 # 1. Clonar el repo
-git clone https://github.com/<tu-usuario>/propiedades-cl-ds.git
+git clone https://github.com/JavierSaldiasA/propiedades-cl-ds.git
 cd propiedades-cl-ds
 
 # 2. Crear y activar el entorno virtual
