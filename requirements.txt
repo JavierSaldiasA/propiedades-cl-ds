@@ -1,11 +1,15 @@
 # Scraping — después de instalar, correr: playwright install chromium
 playwright
+beautifulsoup4
 
 # Datos / ETL
 pandas
 pyarrow
 
-# Base de datos: Supabase Postgres con queries directas (ver contexto/decisiones.md)
+# Indicadores económicos (valor UF — API Banco Central, ver contexto/decisiones.md)
+bcchapi
+
+# Base de datos: Supabase Postgres con queries directas
 psycopg[binary]
 
 # API
