@@ -1,4 +1,5 @@
-# Scraping — después de instalar, correr: playwright install chromium
+# Scraping — Yapo se scrapea con httpx (server-rendered). Playwright queda
+# como fallback ante anti-bot: playwright install chromium
 playwright
 beautifulsoup4
 
@@ -6,7 +7,7 @@ beautifulsoup4
 pandas
 pyarrow
 
-# Indicadores económicos (valor UF — API Banco Central, ver contexto/decisiones.md)
+# Indicadores económicos
 bcchapi
 
 # Base de datos: Supabase Postgres con queries directas
