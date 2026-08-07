@@ -21,7 +21,8 @@ Este proyecto construye un pipeline de datos de extremo a extremo que:
 
 ## 2. Origen de los datos
 
-Datos públicos scrapeados con Playwright de portales inmobiliarios chilenos:
+Datos públicos scrapeados con httpx de portales inmobiliarios chilenos
+(server-rendered; Playwright disponible como fallback ante anti-bot):
 
 | Fuente | Estado |
 | --- | --- |
@@ -43,9 +44,9 @@ proxy geográfico (ver Limitaciones).
 
 ```
 Portales (Yapo / Portal Inmobiliario / TOCTOC)
-        │  Playwright (manual/local)
+        │  httpx (manual/local)
         ▼
-data/raw/ (Parquet) ──► ETL ──► Supabase (PostgreSQL + PostGIS)
+data/raw/ (HTML.gz + Parquet) ──► ETL ──► Supabase (PostgreSQL + PostGIS)
                                       │
                         src/features/ → models/ (LightGBM/XGBoost, offline)
                                       │
@@ -104,7 +105,7 @@ validación cruzada y, si el volumen lo permite, separación temporal
 
 ## 10. Próximos pasos
 
-- [ ] Fase 1: scraper de Yapo Propiedades + ETL inicial a Supabase
+- [ ] Fase 1: ~~scraper de Yapo Propiedades~~ (listo) + ETL inicial a Supabase
 - [ ] Scrapers de Portal Inmobiliario y TOCTOC
 - [ ] EDA en `notebooks/` y modelo baseline
 - [ ] API de valoración y frontend Streamlit
@@ -135,7 +136,8 @@ source .venv/bin/activate
 # 3. Instalar dependencias (incluye herramientas de desarrollo)
 pip install -r requirements-dev.txt
 
-# 4. Descargar el navegador para el scraper
+# 4. (Opcional) Navegador de fallback para el scraper — solo si httpx
+#    llegara a ser bloqueado por anti-bot (ver contexto/decisiones.md)
 playwright install chromium
 
 # 5. Configurar variables de entorno
@@ -145,18 +147,16 @@ cp .env.example .env
 
 ### Uso
 
-🚧 Los componentes ejecutables (scraper, API, app) están en desarrollo.
-Cuando existan, se correrán así:
-
 ```bash
-# Scraper (manual/local)
-python -m src.scraping.yapo
+# Scraper de Yapo (manual/local) — scrapea las 4 categorías principales
+# (venta/arriendo × casas/deptos) y guarda en data/raw/yapo/<run_id>/
+python -m src.scraping.yapo --max-paginas 5 --max-detalles 100 --delay 2.0
 
-# API (desarrollo)
-uvicorn api.main:app --reload
+# Opciones: --categorias <slugs>  --max-paginas N  --max-detalles N (0 las omite)  --delay SEG
 
-# Frontend
-streamlit run app/main.py
+# API y frontend: 🚧 en desarrollo. Cuando existan, se correrán así:
+# uvicorn api.main:app --reload
+# streamlit run app/main.py
 ```
 
 ### Desarrollo
