@@ -3,7 +3,7 @@
 Funciones puras: reciben HTML como string y devuelven dicts, sin tocar red
 ni disco.
 
-Selectores verificados contra el HTML real el 2026-08-07. 
+Selectores verificados contra el HTML real el 2026-08-07.
 Trampas conocidas:
 - El atributo data-price de las tarjetas está en USD: NO usar como precio.
 - Los ítems de detalle (m²/dorm/baños/estac.) vienen en orden variable:
