@@ -88,3 +88,27 @@ def test_moneda_clf_se_normaliza_a_uf():
     assert detalle["comuna"] is None
     assert detalle["beneficios"] == []
     assert detalle["bodega"] is None
+
+
+def test_m2_formato_us_y_ausencia_no_crashea():
+    """Los m² del detalle vienen en formato US (punto decimal) y los
+    atributos ausentes deben quedar en None, no lanzar excepción."""
+    html = """
+    <html><body>
+    <div class="d3-property-details">
+      <div class="d3-property-details__detail-label">
+        Área construida (m²)
+        <p class="d3-property-details__detail">80.5</p>
+      </div>
+      <div class="d3-property-details__detail-label quickmessage-info">
+        M² totales
+        <p class="d3-property-details__detail">
+          <a href="#" class="quickmessage-cta">¡Pregunta al anunciante!</a>
+        </p>
+      </div>
+    </div>
+    </body></html>
+    """
+    detalle = parsear_detalle(html)
+    assert detalle["m2_construida"] == 80.5
+    assert detalle["m2_totales"] is None

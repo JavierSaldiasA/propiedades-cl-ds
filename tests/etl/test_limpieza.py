@@ -31,6 +31,7 @@ def _df_crudo() -> pd.DataFrame:
             "m2_construida": pd.array([55.0, None, None], dtype="Float64"),
             "m2_totales": pd.array([60.0, None, None], dtype="Float64"),
             "m2_tarjeta": pd.array([50.0, 70.0, None], dtype="Float64"),
+            "gastos_comunes": pd.array([85000.0, None, None], dtype="Float64"),
             "dormitorios": pd.array([3, 2, None], dtype="Int64"),
             "banos": pd.array([2, 1, None], dtype="Int64"),
             "estacionamientos": pd.array([1, None, None], dtype="Int64"),
