@@ -103,6 +103,20 @@ def _a_entero(texto: str | None) -> int | None:
     return int(numero) if numero is not None else None
 
 
+def _a_flotante(texto: str | None) -> float | None:
+    """float() None-safe para atributos del detalle en formato US.
+
+    Los m² del detalle vienen en formato US (punto = decimal: "80.5"),
+    a diferencia de los precios (es-CL) -> NO usar parsear_numero_cl aquí.
+    """
+    if not texto:
+        return None
+    try:
+        return float(texto)
+    except ValueError:
+        return None
+
+
 def _a_booleano_si_no(texto: str | None) -> bool | None:
     if not texto:
         return None
@@ -165,8 +179,8 @@ def parsear_detalle(html: str) -> dict:
         "dormitorios": _a_entero(atributos.get("Dormitorios")),
         "banos": _a_entero(atributos.get("Baños")),
         "estacionamientos": _a_entero(atributos.get("Estacionamientos")),
-        "m2_construida": float(atributos.get("Área construida (m²)")),
-        "m2_totales": float(atributos.get("M² totales")),
+        "m2_construida": _a_flotante(atributos.get("Área construida (m²)")),
+        "m2_totales": _a_flotante(atributos.get("M² totales")),
         "gastos_comunes": parsear_numero_cl(atributos.get("Gastos comunes")),
         "anio_construccion": _a_entero(atributos.get("Años de construcción")),
         "piso": _a_entero(atributos.get("Piso Número")),
