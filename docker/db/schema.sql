@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS properties (
     precio_clp_normalizado NUMERIC(14, 2),
     m2_util NUMERIC(8, 2),
     m2_total NUMERIC(8, 2),
+    gastos_comunes NUMERIC(14, 2),
     dormitorios SMALLINT,
     banos SMALLINT,
     estacionamientos SMALLINT,
