@@ -4,7 +4,7 @@ Estimación del precio justo de propiedades en el mercado inmobiliario chileno,
 detección de publicaciones sub/sobrevaloradas y recomendación de propiedades
 similares, a partir de datos scrapeados de portales públicos.
 
-> 🚧 Proyecto en desarrollo — las secciones 4 a 8 se completarán a medida que avancen las fases.
+> 🚧 Proyecto en desarrollo — las secciones 5 a 8 se completarán a medida que avancen las fases.
 
 ## 1. Problema
 
@@ -35,10 +35,11 @@ scraping de larga duración). Los snapshots crudos se guardan en `data/raw/`
 (Parquet) y nunca se editan a mano.
 
 Entidad principal (`properties`): tipo de operación (venta/arriendo), tipo de
-propiedad, precio (valor + moneda), m² útiles/totales, dormitorios, baños,
-estacionamientos, bodega, comuna, región, antigüedad, descripción, y fechas de
-publicación y scraping. Sin latitud/longitud en el MVP: se usa `comuna` como
-proxy geográfico (ver Limitaciones).
+propiedad, precio (valor + moneda), m² útiles/totales, gastos comunes,
+dormitorios, baños, estacionamientos, bodega, comuna, región, antigüedad,
+descripción, y fechas de publicación y scraping. Sin latitud/longitud en la BD
+por ahora: se usa `comuna` como proxy geográfico (ver Limitaciones); las
+coordenadas que Yapo expone se guardan igual en el parquet crudo.
 
 ## 3. Arquitectura
 
@@ -63,11 +64,22 @@ data/raw/ (HTML.gz + Parquet) ──► ETL ──► Supabase (PostgreSQL + Pos
 
 ## 4. Limpieza de datos
 
-🚧 *En desarrollo.* Alcance planeado:
+Implementado en `src/etl/` (funciones puras DataFrame → DataFrame, testeadas
+sin BD). Reglas actuales:
 
-- Normalización de precios UF ↔ CLP para comparar venta y arriendo.
-- Normalización de m² útiles vs. totales (las fuentes los reportan de forma inconsistente).
-- Deduplicación de publicaciones y trazabilidad por `fuente` y `url_origen`.
+- **Precios UF → CLP** (`uf.py`): serie diaria `F073.UFF.PRE.Z.D` del Banco
+  Central vía `bcchapi`; cada aviso se convierte con la UF de su
+  `fecha_publicacion` (fallback: `fecha_scraping`; si el día exacto no tiene
+  valor, el día anterior más cercano). Resultado en `precio_clp_normalizado`.
+- **m² útiles vs. totales** (`limpieza.py`): como las fuentes los reportan de
+  forma inconsistente, se usa fallback en cadena (supuesto del MVP):
+  `m2_util := m2_construida (detalle) → m2_tarjeta`;
+  `m2_total := m2_totales → m2_construida → m2_tarjeta`.
+- **Antigüedad**: `antiguedad_anios := año(fecha_scraping) − anio_construccion`
+  (mínimo 0).
+- **Deduplicación y trazabilidad**: un aviso por `(fuente, url_origen)`
+  (constraint UNIQUE); el upsert (`ON CONFLICT DO UPDATE`) actualiza el aviso
+  existente con la versión más reciente scrapeada.
 
 ## 5. Ingeniería de variables
 
@@ -105,7 +117,7 @@ validación cruzada y, si el volumen lo permite, separación temporal
 
 ## 10. Próximos pasos
 
-- [ ] Fase 1: ~~scraper de Yapo Propiedades~~ (listo) + ETL inicial a Supabase
+- [x] Fase 1: scraper de Yapo Propiedades + ETL inicial a Supabase
 - [ ] Scrapers de Portal Inmobiliario y TOCTOC
 - [ ] EDA en `notebooks/` y modelo baseline
 - [ ] API de valoración y frontend Streamlit
@@ -153,6 +165,11 @@ cp .env.example .env
 python -m src.scraping.yapo --max-paginas 5 --max-detalles 100 --delay 2.0
 
 # Opciones: --categorias <slugs>  --max-paginas N  --max-detalles N (0 las omite)  --delay SEG
+
+# ETL a Supabase (requiere .env con URL_DATABASE y credenciales BCCH)
+python -m src.etl.cargar --crear-schema            # primera vez: crea la tabla
+python -m src.etl.cargar                           # procesa la última corrida
+python -m src.etl.cargar --run-id 20260807_104024  # una corrida específica
 
 # API y frontend: 🚧 en desarrollo. Cuando existan, se correrán así:
 # uvicorn api.main:app --reload
