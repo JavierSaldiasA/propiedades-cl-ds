@@ -27,6 +27,7 @@ COLUMNAS_PROPERTIES = [
     "precio_clp_normalizado",
     "m2_util",
     "m2_total",
+    "gastos_comunes",
     "dormitorios",
     "banos",
     "estacionamientos",
