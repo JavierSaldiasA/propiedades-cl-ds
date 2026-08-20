@@ -2,7 +2,11 @@
 
 import pytest
 
-from src.scraping.numeros import parsear_numero_cl, parsear_precio_texto
+from src.scraping.numeros import (
+    parsear_m2,
+    parsear_numero_cl,
+    parsear_precio_texto,
+)
 
 
 @pytest.mark.parametrize(
@@ -42,3 +46,25 @@ def test_parsear_precio_texto(texto, valor, moneda):
 @pytest.mark.parametrize("texto", [None, "", "Consultar", "123"])
 def test_parsear_precio_texto_sin_moneda(texto):
     assert parsear_precio_texto(texto) == (None, None)
+
+
+@pytest.mark.parametrize(
+    "texto, esperado",
+    [
+        ("163 m²", 163.0),  # entero plano
+        ("163 m² útiles", 163.0),
+        ("37,54 m²", 37.54),  # coma decimal es-CL
+        ("5.000 m² totales", 5000.0),  # punto de miles es-CL (3 dígitos)
+        ("25.000 m²", 25000.0),
+        ("63.1", 63.1),  # punto decimal US (1 dígito)
+        ("80.50", 80.5),  # punto decimal US (2 dígitos)
+        ("1.234.567 m²", 1234567.0),  # grupos de miles múltiples
+    ],
+)
+def test_parsear_m2(texto, esperado):
+    assert parsear_m2(texto) == esperado
+
+
+@pytest.mark.parametrize("texto", [None, "", "m²", "superficie"])
+def test_parsear_m2_invalido(texto):
+    assert parsear_m2(texto) is None
