@@ -4,6 +4,8 @@ import pandas as pd
 
 from src.etl.limpieza import (
     COLUMNAS_PROPERTIES,
+    M2_MAXIMO_PLAUSIBLE,
+    PRECIOS_MAXIMOS_PLAUSIBLES,
     calcular_antiguedad,
     normalizar_m2,
     normalizar_precios,
@@ -69,6 +71,41 @@ def test_normalizar_precios_valor_faltante():
     assert pd.isna(df["precio_clp_normalizado"][0])
 
 
+def test_normalizar_precios_anula_error_de_moneda():
+    """Monto CLP tipeado con moneda UF (caso real Yapo 32850692) -> NA."""
+    df = _df_crudo()
+    df.loc[0, "precio_valor"] = pd.array([125_000_000.0], dtype="Float64")
+    df = normalizar_precios(df, SERIE_UF)
+    assert pd.isna(df["precio_valor"][0])  # 125M UF > tope de UF
+    assert pd.isna(df["precio_clp_normalizado"][0])  # ≈ 5×10¹² CLP
+
+
+def test_normalizar_precios_conserva_legitimos():
+    """El umbral no toca precios legítimos altos (incl. bordes exactos)."""
+    df = _df_crudo()
+    df.loc[0, "precio_valor"] = pd.array(
+        [float(PRECIOS_MAXIMOS_PLAUSIBLES["UF"])], dtype="Float64"
+    )  # borde exacto UF (65.000 UF real: casa de lujo legítima)
+    df.loc[1, "precio_valor"] = pd.array(
+        [float(PRECIOS_MAXIMOS_PLAUSIBLES["CLP"])], dtype="Float64"
+    )  # borde exacto CLP (1.900M real: máximo legítimo observado)
+    df = normalizar_precios(df, SERIE_UF)
+    assert df["precio_valor"][0] == 100_000.0
+    assert df["precio_valor"][1] == 10_000_000_000.0
+    # 100.000 UF × 40.000 CLP/UF = 4×10⁹ < 10¹²: no desborda NUMERIC(14,2)
+    assert df["precio_clp_normalizado"][0] == 4_000_000_000.0
+
+
+def test_normalizar_precios_anulacion_no_toca_otras_columnas():
+    df = _df_crudo()
+    df.loc[0, "precio_valor"] = pd.array([125_000_000.0], dtype="Float64")
+    df = normalizar_precios(df, SERIE_UF)
+    # el aviso sobrevive completo: solo el precio se anula
+    assert df["precio_moneda"][0] == "UF"
+    assert df["m2_tarjeta"][0] == 50.0
+    assert df["comuna"][0] == "Santiago"
+
+
 def test_normalizar_m2_fallback_en_cadena():
     df = normalizar_m2(_df_crudo())
     # util: construida -> tarjeta
@@ -78,6 +115,45 @@ def test_normalizar_m2_fallback_en_cadena():
     # total: totales -> construida -> tarjeta
     assert df["m2_total"][0] == 60.0
     assert df["m2_total"][1] == 70.0
+
+
+def test_normalizar_m2_anula_error_de_dedo():
+    """m² multiplicado por 1000 por el anunciante -> NA, no 1.800.000."""
+    df = _df_crudo()
+    df.loc[0, "m2_construida"] = pd.NA
+    df.loc[0, "m2_totales"] = pd.NA
+    df.loc[0, "m2_tarjeta"] = 1_800_000.0
+    df = normalizar_m2(df)
+    assert pd.isna(df["m2_util"][0])
+    assert pd.isna(df["m2_total"][0])
+
+
+def test_normalizar_m2_conserva_valores_plausibles():
+    """El umbral no toca superficies legítimas (incl. terrenos grandes)."""
+    df = _df_crudo()
+    for fila, m2 in (
+        (0, float(M2_MAXIMO_PLAUSIBLE)),  # borde exacto
+        (1, 1_365.0),  # máximo legítimo observado
+        (2, 10_000.0),  # terreno grande legítimo
+    ):
+        df.loc[fila, "m2_construida"] = pd.NA
+        df.loc[fila, "m2_totales"] = pd.NA
+        df.loc[fila, "m2_tarjeta"] = m2
+    df = normalizar_m2(df)
+    assert df["m2_util"][0] == 100_000.0
+    assert df["m2_util"][1] == 1_365.0
+    assert df["m2_util"][2] == 10_000.0
+
+
+def test_normalizar_m2_anulacion_no_toca_otras_columnas():
+    df = _df_crudo()
+    df.loc[0, "m2_construida"] = pd.NA
+    df.loc[0, "m2_tarjeta"] = 1_800_000.0
+    df = normalizar_m2(df)
+    # el aviso sobrevive completo: solo el m² se anula
+    assert df["precio_valor"][0] == 100.0
+    assert df["dormitorios"][0] == 3
+    assert df["comuna"][0] == "Santiago"
 
 
 def test_calcular_antiguedad():
