@@ -27,7 +27,7 @@ Datos públicos scrapeados con httpx de portales inmobiliarios chilenos
 | Fuente | Estado |
 | --- | --- |
 | Yapo Propiedades | Primera fuente (Fase 1) |
-| Portal Inmobiliario | Pendiente |
+| Portal Inmobiliario | Segunda fuente (Fase 2) |
 | TOCTOC | Pendiente |
 
 El scraping corre de forma manual/local (los free tiers de hosting no soportan
@@ -71,10 +71,15 @@ sin BD). Reglas actuales:
   Central vía `bcchapi`; cada aviso se convierte con la UF de su
   `fecha_publicacion` (fallback: `fecha_scraping`; si el día exacto no tiene
   valor, el día anterior más cercano). Resultado en `precio_clp_normalizado`.
+  Los precios implausibles (sobre el tope de su moneda: 100.000 UF /
+  10.000M CLP) se anulan: son errores del anunciante, ej. un monto CLP
+  tipeado con moneda UF.
 - **m² útiles vs. totales** (`limpieza.py`): como las fuentes los reportan de
   forma inconsistente, se usa fallback en cadena (supuesto del MVP):
   `m2_util := m2_construida (detalle) → m2_tarjeta`;
   `m2_total := m2_totales → m2_construida → m2_tarjeta`.
+  Los valores implausibles (> 100.000 m²: errores de digitación del
+  anunciante, ej. m² multiplicado por 1000) se anulan.
 - **Antigüedad**: `antiguedad_anios := año(fecha_scraping) − anio_construccion`
   (mínimo 0).
 - **Deduplicación y trazabilidad**: un aviso por `(fuente, url_origen)`
@@ -118,7 +123,8 @@ validación cruzada y, si el volumen lo permite, separación temporal
 ## 10. Próximos pasos
 
 - [x] Fase 1: scraper de Yapo Propiedades + ETL inicial a Supabase
-- [ ] Scrapers de Portal Inmobiliario y TOCTOC
+- [x] Scraper de Portal Inmobiliario (avisos individuales)
+- [ ] Scraper de TOCTOC
 - [ ] EDA en `notebooks/` y modelo baseline
 - [ ] API de valoración y frontend Streamlit
 - [ ] Geocodificación (Nominatim/OSM) para granularidad geográfica fina
@@ -149,7 +155,7 @@ source .venv/bin/activate
 pip install -r requirements-dev.txt
 
 # 4. (Opcional) Navegador de fallback para el scraper — solo si httpx
-#    llegara a ser bloqueado por anti-bot (ver contexto/decisiones.md)
+#    llegara a ser bloqueado por anti-bot
 playwright install chromium
 
 # 5. Configurar variables de entorno
@@ -164,12 +170,18 @@ cp .env.example .env
 # (venta/arriendo × casas/deptos) y guarda en data/raw/yapo/<run_id>/
 python -m src.scraping.yapo --max-paginas 5 --max-detalles 100 --delay 2.0
 
-# Opciones: --categorias <slugs>  --max-paginas N  --max-detalles N (0 las omite)  --delay SEG
+# Scraper de Portal Inmobiliario — scrapea las 4 categorías en la sección
+# "propiedades-usadas" (solo avisos individuales) y guarda en
+# data/raw/portal_inmobiliario/<run_id>/ con las mismas columnas que Yapo
+python -m src.scraping.portal_inmobiliario --max-paginas 5 --max-detalles 100 --delay 2.0
+
+# Opciones (ambos): --categorias <slugs>  --max-paginas N  --max-detalles N (0 las omite)  --delay SEG
 
 # ETL a Supabase (requiere .env con URL_DATABASE y credenciales BCCH)
 python -m src.etl.cargar --crear-schema            # primera vez: crea la tabla
-python -m src.etl.cargar                           # procesa la última corrida
-python -m src.etl.cargar --run-id 20260807_104024  # una corrida específica
+python -m src.etl.cargar                           # última corrida de cada fuente
+python -m src.etl.cargar --fuente portal_inmobiliario
+python -m src.etl.cargar --fuente yapo --run-id 20260807_104024  # corrida específica
 
 # API y frontend: 🚧 en desarrollo. Cuando existan, se correrán así:
 # uvicorn api.main:app --reload
