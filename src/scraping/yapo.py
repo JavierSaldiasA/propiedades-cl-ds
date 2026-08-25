@@ -21,7 +21,13 @@ from pathlib import Path
 import httpx
 import pandas as pd
 
-from src.scraping.cliente_http import ErrorBloqueo, crear_cliente, descargar, esperar
+from src.scraping.cliente_http import (
+    ErrorBloqueo,
+    crear_cliente,
+    descargar,
+    descargar_aviso,
+    esperar,
+)
 from src.scraping.yapo_detalle import parsear_detalle
 from src.scraping.yapo_listado import (
     BASE_URL,
@@ -158,7 +164,14 @@ def _scrapear_listados(args, cliente, directorio_html, registros) -> None:
         while url and pagina < args.max_paginas:
             pagina += 1
             logger.info("Listado %s página %d: %s", categoria, pagina, url)
-            html = descargar(url, cliente)
+            try:
+                html = descargar(url, cliente)
+            except httpx.HTTPStatusError as error:
+                logger.error(
+                    "Listado no disponible (HTTP %d); se pasa a la siguiente categoría",
+                    error.response.status_code,
+                )
+                break
             _guardar_html(
                 directorio_html / f"listado_{categoria}_p{pagina}.html.gz", html
             )
@@ -185,7 +198,9 @@ def _scrapear_detalles(args, cliente, directorio_html, registros) -> None:
         logger.info(
             "Detalle %d/%d: %s", indice, len(candidatos), registro["url_origen"]
         )
-        html = descargar(registro["url_origen"], cliente)
+        html = descargar_aviso(registro["url_origen"], cliente)
+        if html is None:  # aviso dado de baja entre listado y detalle
+            continue
         _guardar_html(directorio_html / f"detalle_{registro['adid']}.html.gz", html)
         try:
             detalle = parsear_detalle(html)

@@ -62,6 +62,8 @@ def descargar(url: str, cliente: httpx.Client) -> str:
         if respuesta.status_code == 403:
             raise ErrorBloqueo(f"Bloqueo anti-bot en {url} (HTTP 403)")
         if respuesta.status_code in (429, 500, 502, 503):
+            if intento == MAX_REINTENTOS:
+                break  # sin éxito: no esperar para rendirse
             espera = ESPERA_BACKOFF_BASE * (2 ** (intento - 1))
             logger.warning(
                 "HTTP %d en %s; reintento %d en %.0fs",
@@ -75,3 +77,21 @@ def descargar(url: str, cliente: httpx.Client) -> str:
         respuesta.raise_for_status()
         return respuesta.text
     raise ErrorBloqueo(f"Sin éxito tras {MAX_REINTENTOS} reintentos en {url}")
+
+
+def descargar_aviso(url: str, cliente: httpx.Client) -> str | None:
+    """Descarga una página de detalle; None si ya no existe (HTTP 4xx).
+
+    Los avisos pueden darse de baja entre que se scrapeó el listado y la
+    visita de su detalle: es esperable y no debe abortar la corrida. Los
+    bloqueos (ErrorBloqueo) sí se propagan.
+    """
+    try:
+        return descargar(url, cliente)
+    except httpx.HTTPStatusError as error:
+        logger.warning(
+            "Aviso no disponible (HTTP %d): %s",
+            error.response.status_code,
+            url,
+        )
+        return None
