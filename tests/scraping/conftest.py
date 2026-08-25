@@ -12,6 +12,15 @@ Portal Inmobiliario (2026-08-19):
 - pi_detalle_casa.html: VIP de la casa MLC4344772628 (venta, UF, Las Condes)
 - pi_detalle_depto.html: VIP del depto. MLC4351447942
   (arriendo, CLP, Independencia)
+
+TOCTOC (2026-08-24):
+- toctoc_listado_venta.json: página 1 del buscador GetProps
+  (operacion=venta, estado=2: 510 avisos usados, mezcla casa/depto)
+- toctoc_listado_arriendo.json: ídem para arriendo (510 avisos)
+- toctoc_ficha_venta_particular.html: ficha del depto. 4231011
+  (venta, UF, particular, Santiago)
+- toctoc_ficha_arriendo_corredora.html: ficha del depto. 4281040
+  (arriendo, CLP, corredora, La Florida)
 """
 
 from pathlib import Path
@@ -53,3 +62,23 @@ def html_pi_detalle_casa() -> str:
 @pytest.fixture
 def html_pi_detalle_depto() -> str:
     return _leer_fixture("pi_detalle_depto.html")
+
+
+@pytest.fixture
+def json_toctoc_listado_venta() -> str:
+    return _leer_fixture("toctoc_listado_venta.json")
+
+
+@pytest.fixture
+def json_toctoc_listado_arriendo() -> str:
+    return _leer_fixture("toctoc_listado_arriendo.json")
+
+
+@pytest.fixture
+def html_toctoc_ficha_venta() -> str:
+    return _leer_fixture("toctoc_ficha_venta_particular.html")
+
+
+@pytest.fixture
+def html_toctoc_ficha_arriendo() -> str:
+    return _leer_fixture("toctoc_ficha_arriendo_corredora.html")

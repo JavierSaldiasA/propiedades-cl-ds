@@ -30,11 +30,12 @@ logger = logging.getLogger(__name__)
 
 RUTA_SCHEMA = Path("docker/db/schema.sql")
 
-# Fuente -> directorio del parquet crudo (ambos scrapers escriben las
-# mismas columnas, así que el ETL es idéntico para las dos).
+# Fuente -> directorio del parquet crudo (los scrapers escriben las
+# mismas columnas, así que el ETL es idéntico para todos).
 DIRECTORIOS_RAW = {
     "yapo": Path("data/raw/yapo"),
     "portal_inmobiliario": Path("data/raw/portal_inmobiliario"),
+    "toctoc": Path("data/raw/toctoc"),
 }
 
 

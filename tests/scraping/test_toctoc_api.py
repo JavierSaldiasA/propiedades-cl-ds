@@ -1,0 +1,65 @@
+"""Tests de src/scraping/toctoc_api.py con transporte simulado (sin red)."""
+
+import json
+
+import httpx
+
+from src.scraping.toctoc_api import OPERACIONES, buscar, obtener_token
+
+PAGINA = (
+    '<html><script id="react-engine-props" type="application/json">'
+    '{"token": "jwt-de-prueba", "config": {}}'
+    "</script></html>"
+)
+
+
+def _cliente_mock(pagina=PAGINA, respuesta_api=None):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.startswith("/resultados"):
+            return httpx.Response(200, text=pagina)
+        if request.url.path == "/api/mapa/GetProps":
+            assert request.headers["x-access-token"] == "jwt-de-prueba"
+            return httpx.Response(200, json=respuesta_api or {})
+        return httpx.Response(404)
+
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def test_obtener_token():
+    with _cliente_mock() as cliente:
+        assert obtener_token(cliente) == "jwt-de-prueba"
+
+
+def test_obtener_token_sin_script():
+    with _cliente_mock(pagina="<html><body>Sin script</body></html>") as cliente:
+        try:
+            obtener_token(cliente)
+        except ValueError as error:
+            assert "react-engine-props" in str(error)
+        else:
+            raise AssertionError("debía fallar sin el script")
+
+
+def test_buscar_envia_token_y_pagina():
+    with _cliente_mock(respuesta_api={"resultados": {"Total": 10}}) as cliente:
+        respuesta = buscar(cliente, "jwt-de-prueba", "venta", 3)
+    assert respuesta["resultados"]["Total"] == 10
+
+
+def test_buscar_cuerpo_por_operacion():
+    cuerpos = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/mapa/GetProps":
+            cuerpos.append(json.loads(request.content))
+        return httpx.Response(200, json={})
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as cliente:
+        buscar(cliente, "t", "venta", 1)
+        buscar(cliente, "t", "arriendo", 2)
+
+    assert cuerpos[0]["operacion"] == OPERACIONES["venta"]
+    assert cuerpos[0]["estado"] == 2  # solo usadas
+    assert cuerpos[0]["pagina"] == 1
+    assert cuerpos[1]["operacion"] == OPERACIONES["arriendo"]
+    assert cuerpos[1]["pagina"] == 2

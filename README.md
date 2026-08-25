@@ -28,7 +28,7 @@ Datos públicos scrapeados con httpx de portales inmobiliarios chilenos
 | --- | --- |
 | Yapo Propiedades | Primera fuente (Fase 1) |
 | Portal Inmobiliario | Segunda fuente (Fase 2) |
-| TOCTOC | Pendiente |
+| TOCTOC | Tercera fuente (Fase 2) |
 
 El scraping corre de forma manual/local (los free tiers de hosting no soportan
 scraping de larga duración). Los snapshots crudos se guardan en `data/raw/`
@@ -71,7 +71,7 @@ sin BD). Reglas actuales:
   Central vía `bcchapi`; cada aviso se convierte con la UF de su
   `fecha_publicacion` (fallback: `fecha_scraping`; si el día exacto no tiene
   valor, el día anterior más cercano). Resultado en `precio_clp_normalizado`.
-  Los precios implausibles (sobre el tope de su moneda: 100.000 UF /
+  Los precios implausibles (sobre el tope de su moneda: 500.000 UF /
   10.000M CLP) se anulan: son errores del anunciante, ej. un monto CLP
   tipeado con moneda UF.
 - **m² útiles vs. totales** (`limpieza.py`): como las fuentes los reportan de
@@ -124,7 +124,7 @@ validación cruzada y, si el volumen lo permite, separación temporal
 
 - [x] Fase 1: scraper de Yapo Propiedades + ETL inicial a Supabase
 - [x] Scraper de Portal Inmobiliario (avisos individuales)
-- [ ] Scraper de TOCTOC
+- [x] Scraper de TOCTOC (propiedades usadas, vía API interna)
 - [ ] EDA en `notebooks/` y modelo baseline
 - [ ] API de valoración y frontend Streamlit
 - [ ] Geocodificación (Nominatim/OSM) para granularidad geográfica fina
@@ -175,12 +175,17 @@ python -m src.scraping.yapo --max-paginas 5 --max-detalles 100 --delay 2.0
 # data/raw/portal_inmobiliario/<run_id>/ con las mismas columnas que Yapo
 python -m src.scraping.portal_inmobiliario --max-paginas 5 --max-detalles 100 --delay 2.0
 
-# Opciones (ambos): --categorias <slugs>  --max-paginas N  --max-detalles N (0 las omite)  --delay SEG
+# Scraper de TOCTOC — usa su API interna de búsqueda (solo propiedades
+# usadas) y descarga la ficha de cada aviso; guarda en
+# data/raw/toctoc/<run_id>/ con las mismas columnas que los otros
+python -m src.scraping.toctoc --max-paginas 5 --max-detalles 100 --delay 2.0
+
+# Opciones (los tres): --categorias <slugs>  --max-paginas N  --max-detalles N (0 las omite)  --delay SEG
 
 # ETL a Supabase (requiere .env con URL_DATABASE y credenciales BCCH)
 python -m src.etl.cargar --crear-schema            # primera vez: crea la tabla
 python -m src.etl.cargar                           # última corrida de cada fuente
-python -m src.etl.cargar --fuente portal_inmobiliario
+python -m src.etl.cargar --fuente toctoc
 python -m src.etl.cargar --fuente yapo --run-id 20260807_104024  # corrida específica
 
 # API y frontend: 🚧 en desarrollo. Cuando existan, se correrán así:
