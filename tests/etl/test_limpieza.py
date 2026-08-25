@@ -85,15 +85,25 @@ def test_normalizar_precios_conserva_legitimos():
     df = _df_crudo()
     df.loc[0, "precio_valor"] = pd.array(
         [float(PRECIOS_MAXIMOS_PLAUSIBLES["UF"])], dtype="Float64"
-    )  # borde exacto UF (65.000 UF real: casa de lujo legítima)
+    )  # borde exacto UF
     df.loc[1, "precio_valor"] = pd.array(
         [float(PRECIOS_MAXIMOS_PLAUSIBLES["CLP"])], dtype="Float64"
     )  # borde exacto CLP (1.900M real: máximo legítimo observado)
     df = normalizar_precios(df, SERIE_UF)
-    assert df["precio_valor"][0] == 100_000.0
+    assert df["precio_valor"][0] == 500_000.0
     assert df["precio_valor"][1] == 10_000_000_000.0
-    # 100.000 UF × 40.000 CLP/UF = 4×10⁹ < 10¹²: no desborda NUMERIC(14,2)
-    assert df["precio_clp_normalizado"][0] == 4_000_000_000.0
+    # 500.000 UF × 40.000 CLP/UF = 2×10¹⁰ < 10¹²: no desborda NUMERIC(14,2)
+    assert df["precio_clp_normalizado"][0] == 20_000_000_000.0
+
+
+def test_normalizar_precios_conserva_terreno_lujo():
+    """Terreno 2.453 m² en Vitacura a 105.000 UF (caso real TOCTOC
+    4243995) sigue siendo legítimo tras subir el umbral a 500.000 UF."""
+    df = _df_crudo()
+    df.loc[0, "precio_valor"] = pd.array([105_000.0], dtype="Float64")
+    df = normalizar_precios(df, SERIE_UF)
+    assert df["precio_valor"][0] == 105_000.0
+    assert df["precio_clp_normalizado"][0] == 4_200_000_000.0  # 105.000 × 40.000
 
 
 def test_normalizar_precios_anulacion_no_toca_otras_columnas():

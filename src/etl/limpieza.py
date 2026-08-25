@@ -24,10 +24,11 @@ M2_MAXIMO_PLAUSIBLE = 100_000
 
 # Techos de plausibilidad de precio por moneda: por encima es casi seguro un
 # error del anunciante (ej. un monto CLP tipeado con moneda UF: "UF125.000.000"
-# ≈ 5×10¹² CLP; observado en Yapo, aviso 32850692). Con margen ~50x sobre los
-# máximos legítimos observados (65.000 UF / 1.900M CLP) y además blindan el
-# NUMERIC(14,2) de la BD, que revienta con valores ≥ 10¹².
-PRECIOS_MAXIMOS_PLAUSIBLES = {"UF": 100_000, "CLP": 10_000_000_000}
+# ≈ 5×10¹² CLP; observado en Yapo, aviso 32850692). Con margen amplio sobre
+# los legítimos observados (105.000 UF: terreno en Vitacura; 1.900M CLP) y
+# blindan el NUMERIC(14,2) de la BD, que revienta con valores ≥ 10¹²
+# (500.000 UF × UF del día ≈ 2×10¹⁰ < 10¹²).
+PRECIOS_MAXIMOS_PLAUSIBLES = {"UF": 500_000, "CLP": 10_000_000_000}
 
 # Columnas de la tabla properties (docker/db/schema.sql), en orden, sin `id`
 COLUMNAS_PROPERTIES = [
