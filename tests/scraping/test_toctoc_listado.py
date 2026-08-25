@@ -23,7 +23,8 @@ def test_parsear_listado_venta_extrae_todos(json_toctoc_listado_venta):
 
 
 def test_parsear_listado_venta_primera(json_toctoc_listado_venta):
-    aviso = parsear_listado(_respuesta(json_toctoc_listado_venta))[0]
+    avisos = parsear_listado(_respuesta(json_toctoc_listado_venta))
+    aviso = avisos[0]
     assert aviso["adid"] == "4231011"
     assert aviso["url_origen"] == (
         "https://www.toctoc.com/propiedades/compraparticularsr/departamento/"
@@ -38,9 +39,23 @@ def test_parsear_listado_venta_primera(json_toctoc_listado_venta):
     assert aviso["precio_moneda"] == "UF"  # conversión [24] > [22] => UF
     assert aviso["comuna"] == "Santiago"
     assert aviso["region"] is None  # el listado no la trae
+    # superficies y atributos del arreglo posicional (verificados vs ficha)
+    assert aviso["m2_construida"] == 60.0  # [33] útil
+    assert aviso["m2_totales"] is None  # [31] sin terreno
+    assert aviso["dormitorios"] == 2  # [8]
+    assert aviso["banos"] == 2  # [4]
     assert aviso["latitud"] == -33.427746
     assert aviso["longitud"] == -70.67519
     assert str(aviso["fecha_publicacion"].date()) == "2026-06-25"
+
+
+def test_parsear_listado_cobertura_atributos(json_toctoc_listado_arriendo):
+    """Los atributos del arreglo cubren ~99% del listado (no solo fichas)."""
+    avisos = parsear_listado(_respuesta(json_toctoc_listado_arriendo))
+    n = len(avisos)
+    assert sum(1 for a in avisos if a["dormitorios"]) > 0.9 * n
+    assert sum(1 for a in avisos if a["banos"]) > 0.9 * n
+    assert sum(1 for a in avisos if a["m2_construida"] or a["m2_totales"]) > 0.8 * n
 
 
 def test_parsear_listado_arriendo_precio_clp(json_toctoc_listado_arriendo):

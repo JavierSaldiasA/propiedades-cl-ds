@@ -8,12 +8,17 @@ GetProps devuelve cada propiedad como un ARREGLO posicional de ~45 campos
 necesarias para descubrir avisos; los datos completos y confiables vienen
 de la ficha (toctoc_ficha.py).
 
-Posiciones verificadas contra el API real el 2026-08-24:
+Posiciones verificadas contra el API real el 2026-08-24 (precios, id,
+URL, comuna, fecha) y el 2026-08-25 contra 99 fichas enriquecidas
+(superficies, dormitorios y baños):
 - [1] id de la propiedad, [2] longitud, [3] latitud, [7] comuna
 - [14] fecha de publicación ("dd-mm-yyyy 0:00:00")
 - [22] precio de publicación (moneda real del aviso), [24] su conversión
   a la otra moneda
 - [39] título, [40] URL de la ficha
+- [4] baños, [8] dormitorios (pares [x]/[x+1] duplicados; en usados ambos
+  valores coinciden): 92-96/96 coincidencias exactas contra fichas
+- [31] superficie total (terreno si hay), [33] superficie útil
 
 Trampas conocidas:
 - El POST acepta tipoPropiedad pero NO filtra: el tipo se infiere del
@@ -119,10 +124,25 @@ def _parsear_propiedad(propiedad: list) -> dict | None:
         "precio_moneda": precio_moneda,
         "comuna": propiedad[7] or None,
         "region": None,  # no viene en el listado; la ficha la trae
+        "m2_construida": _positivo(propiedad[33]),  # superficie útil
+        "m2_totales": _positivo(propiedad[31]),  # total (terreno si hay)
+        "dormitorios": _entero_positivo(propiedad[8]),
+        "banos": _entero_positivo(propiedad[4]),
         "latitud": propiedad[3] if propiedad[3] else None,
         "longitud": propiedad[2] if propiedad[2] else None,
         "fecha_publicacion": _parsear_fecha(propiedad[14]),
     }
+
+
+def _positivo(valor) -> float | None:
+    """0.0 (sin dato en el arreglo) -> None."""
+    numero = float(valor) if valor else 0.0
+    return numero if numero > 0 else None
+
+
+def _entero_positivo(valor) -> int | None:
+    numero = _positivo(valor)
+    return int(numero) if numero is not None else None
 
 
 def parsear_listado(respuesta: dict) -> list[dict]:
