@@ -2,6 +2,7 @@
 
 Uso:
     python -m src.scraping.toctoc --max-paginas 2 --max-detalles 10
+    python -m src.scraping.toctoc --reparsear 20260825_182426
 
 A diferencia de Yapo (HTML) y Portal Inmobiliario (JSON NORDIC), TOCTOC
 es una SPA cuyo buscador vive en un API interna: el scraper obtiene un
@@ -11,6 +12,10 @@ data/raw/toctoc/<run_id>/ las respuestas crudas comprimidas (html/*.gz:
 JSON del listado + HTML de las fichas) más un parquet con los campos tal
 como se scrapearon (sin normalizar; eso es trabajo del ETL). Las columnas
 son las mismas que las de los otros scrapers para reutilizar el ETL.
+
+Con --reparsear se regenera el parquet de una corrida anterior desde sus
+snapshots guardados, sin tocar la red (útil cuando el parser gana campos
+nuevos).
 """
 
 from __future__ import annotations
@@ -131,6 +136,15 @@ def parsear_argumentos(argv: list[str] | None = None) -> argparse.Namespace:
         default=2.0,
         help="Delay base en segundos entre requests (default: 2.0).",
     )
+    parser.add_argument(
+        "--reparsear",
+        metavar="RUN_ID",
+        default=None,
+        help=(
+            "Regenera el parquet desde los snapshots guardados de esa corrida "
+            "(sin red) y lo escribe en un run_id nuevo; omite el scraping."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -234,6 +248,18 @@ def _scrapear_listados(args, cliente, token, directorio_html, registros) -> None
                 esperar(args.delay)
 
 
+def _fusionar_ficha(registro: dict, detalle: dict) -> None:
+    """Merge de la ficha sobre el registro del listado, ignorando Nones.
+
+    url_origen no se sobrescribe: la ficha puede reportar una URL canónica
+    con hash distinta de la del listado, y la dedup de la BD depende de una
+    URL estable por aviso.
+    """
+    registro.update(
+        {k: v for k, v in detalle.items() if v is not None and k != "url_origen"}
+    )
+
+
 def _scrapear_detalles(args, cliente, directorio_html, registros) -> None:
     candidatos = list(registros.values())[: args.max_detalles]
     for indice, registro in enumerate(candidatos, start=1):
@@ -252,14 +278,69 @@ def _scrapear_detalles(args, cliente, directorio_html, registros) -> None:
                 registro["adid"],
             )
             continue
-        # url_origen no se sobrescribe: la ficha puede reportar una URL
-        # canónica con hash distinta de la del listado, y la dedup de la
-        # BD depende de una URL estable por aviso.
-        registro.update(
-            {k: v for k, v in detalle.items() if v is not None and k != "url_origen"}
-        )
+        _fusionar_ficha(registro, detalle)
         if indice < len(candidatos):
             esperar(args.delay)
+
+
+def _reparsear(run_id: str) -> None:
+    """Regenera el parquet desde los snapshots de una corrida, sin red.
+
+    Re-parsea los JSON de listado y los HTML de fichas ya guardados con los
+    parsers actuales (útil cuando se agrega un campo nuevo al parser) y
+    escribe un nuevo run_id con el parquet; los crudos originales quedan
+    intactos.
+    """
+    directorio_origen = DIRECTORIO_RAW / run_id / "html"
+    if not directorio_origen.is_dir():
+        raise SystemExit(f"No existe el directorio de snapshots: {directorio_origen}")
+
+    # fecha_scraping fiel a la corrida original (codificada en el run_id)
+    try:
+        fecha_corrida = datetime.strptime(run_id.split("_")[0], "%Y%m%d").date()
+    except ValueError:
+        fecha_corrida = date.today()
+
+    registros: dict[str, dict] = {}
+    for ruta in sorted(directorio_origen.glob("listado_*.json.gz")):
+        respuesta = json.loads(_leer_gzip(ruta))
+        avisos = parsear_listado(respuesta)
+        logger.info("Listado %s: %d avisos", ruta.name, len(avisos))
+        for aviso in avisos:
+            aviso["fecha_scraping"] = fecha_corrida
+            registros.setdefault(aviso["adid"], aviso)
+
+    fichas = 0
+    for ruta in sorted(directorio_origen.glob("detalle_*.html.gz")):
+        adid = ruta.stem.removeprefix("detalle_").removesuffix(".html")
+        registro = registros.get(adid)
+        if registro is None:
+            continue  # ficha de una página de listado que ya no se parsea
+        try:
+            detalle = parsear_ficha(_leer_gzip(ruta))
+        except Exception:
+            logger.exception("  Error parseando %s; se conserva el listado", ruta.name)
+            continue
+        if detalle:
+            _fusionar_ficha(registro, detalle)
+            fichas += 1
+
+    run_nuevo = datetime.now().strftime("%Y%m%d_%H%M%S")
+    directorio_salida = DIRECTORIO_RAW / run_nuevo
+    directorio_salida.mkdir(parents=True, exist_ok=True)
+    _escribir_parquet(registros, directorio_salida)
+    logger.info(
+        "Re-parseo de %s listo: %d avisos (%d con ficha) en %s",
+        run_id,
+        len(registros),
+        fichas,
+        directorio_salida,
+    )
+
+
+def _leer_gzip(ruta: Path) -> str:
+    with gzip.open(ruta, "rt", encoding="utf-8") as archivo:
+        return archivo.read()
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -267,6 +348,10 @@ def main(argv: list[str] | None = None) -> None:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
+
+    if args.reparsear:
+        _reparsear(args.reparsear)
+        return
 
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     directorio_salida = DIRECTORIO_RAW / run_id

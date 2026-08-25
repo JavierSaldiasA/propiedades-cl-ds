@@ -180,6 +180,10 @@ python -m src.scraping.portal_inmobiliario --max-paginas 5 --max-detalles 100 --
 # data/raw/toctoc/<run_id>/ con las mismas columnas que los otros
 python -m src.scraping.toctoc --max-paginas 5 --max-detalles 100 --delay 2.0
 
+# Re-parsea los snapshots de una corrida anterior sin tocar la red (útil
+# si el parser gana campos nuevos, como las superficies de TOCTOC)
+python -m src.scraping.toctoc --reparsear 20260825_182426
+
 # Opciones (los tres): --categorias <slugs>  --max-paginas N  --max-detalles N (0 las omite)  --delay SEG
 
 # ETL a Supabase (requiere .env con URL_DATABASE y credenciales BCCH)
