@@ -1,24 +1,28 @@
 """Tests del modo --reparsear de src/scraping/toctoc.py (sin red)."""
 
-import gzip
 import json
 from pathlib import Path
 
 import pandas as pd
 
-from src.scraping import toctoc
+from src.scraping import base, toctoc
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def _guardar_gzip(ruta: Path, texto: str) -> None:
-    with gzip.open(ruta, "wt", encoding="utf-8") as archivo:
-        archivo.write(texto)
+    base.guardar_gzip(ruta, texto)
+
+
+def _scraper(tmp_path) -> toctoc.ScraperToctoc:
+    scraper = toctoc.ScraperToctoc()
+    scraper.directorio_raw = tmp_path
+    return scraper
 
 
 def test_reparsear_regenera_parquet_con_campos_nuevos(tmp_path, monkeypatch):
     """Re-parsea snapshots reales y verifica listado + merge de ficha."""
-    monkeypatch.setattr(toctoc, "DIRECTORIO_RAW", tmp_path)
+    scraper = _scraper(tmp_path)
     run = "20260825_120000"
     html_dir = tmp_path / run / "html"
     html_dir.mkdir(parents=True)
@@ -31,7 +35,7 @@ def test_reparsear_regenera_parquet_con_campos_nuevos(tmp_path, monkeypatch):
         (FIXTURES / "toctoc_ficha_venta_particular.html").read_text(encoding="utf-8"),
     )
 
-    toctoc._reparsear(run)
+    scraper.reparsear(run)
 
     corridas = sorted(p.name for p in tmp_path.iterdir() if p.is_dir())
     assert corridas == [run, corridas[-1]]  # el original intacto + uno nuevo
@@ -53,9 +57,9 @@ def test_reparsear_regenera_parquet_con_campos_nuevos(tmp_path, monkeypatch):
 
 
 def test_reparsear_sin_snapshots_falla(tmp_path, monkeypatch):
-    monkeypatch.setattr(toctoc, "DIRECTORIO_RAW", tmp_path)
+    scraper = _scraper(tmp_path)
     try:
-        toctoc._reparsear("20990101_000000")
+        scraper.reparsear("20990101_000000")
     except SystemExit as error:
         assert "snapshots" in str(error)
     else:
@@ -64,5 +68,5 @@ def test_reparsear_sin_snapshots_falla(tmp_path, monkeypatch):
 
 def test_leer_gzip_roundtrip(tmp_path):
     ruta = tmp_path / "x.json.gz"
-    toctoc._guardar_gzip(ruta, '{"a": 1}')
-    assert json.loads(toctoc._leer_gzip(ruta)) == {"a": 1}
+    _guardar_gzip(ruta, '{"a": 1}')
+    assert json.loads(base.leer_gzip(ruta)) == {"a": 1}
