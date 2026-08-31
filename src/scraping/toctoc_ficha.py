@@ -26,7 +26,14 @@ import re
 from datetime import datetime
 from typing import Any
 
-from src.scraping.numeros import parsear_m2, parsear_numero_cl
+from src.scraping.numeros import (
+    a_booleano_si_no,
+    a_entero,
+    bodega_desde_valor,
+    formatear_precio,
+    parsear_m2,
+    parsear_numero_cl,
+)
 
 # etiqueta normalizada de characteristic -> campo del registro
 ETIQUETAS_CARACTERISTICAS = {
@@ -91,14 +98,6 @@ def _parsear_caracteristicas(data: dict[str, Any]) -> dict[str, Any]:
     return resultado
 
 
-def _a_entero(texto: str | None) -> int | None:
-    if not texto:
-        return None
-    coincidencia = re.search(r"[\d.,]+", str(texto))
-    numero = parsear_numero_cl(coincidencia.group()) if coincidencia else None
-    return int(numero) if numero is not None else None
-
-
 def _detectar_moneda(
     precio: float | None, precio_uf: float | None, valor_uf: float | None
 ) -> tuple[float | None, str | None]:
@@ -130,25 +129,9 @@ def _parsear_fecha_iso(texto: str | None) -> datetime | None:
         return None
 
 
-def _a_booleano_si_no(texto: str | None) -> bool | None:
-    if not texto:
-        return None
-    limpio = str(texto).strip().lower()
-    if limpio in ("si", "sí"):
-        return True
-    if limpio == "no":
-        return False
-    return None
-
-
 def _parsear_bodega(valor: str | None) -> bool | None:
     """ "2" (número de bodegas) o "Sí"/"No" -> bool."""
-    if valor is None:
-        return None
-    numero = _a_entero(valor)
-    if numero is not None:
-        return numero >= 1
-    return _a_booleano_si_no(valor)
+    return bodega_desde_valor(valor)
 
 
 def parsear_ficha(html: str) -> dict:
@@ -172,23 +155,16 @@ def parsear_ficha(html: str) -> dict:
         data.get("price"), data.get("priceUf"), data.get("UF")
     )
 
-    anio = _a_entero(caracteristicas.get("anio_construccion"))
+    anio = a_entero(caracteristicas.get("anio_construccion"))
     if anio == 0:  # "Año de construcción: 0" = desconocido
         anio = None
     if anio is None:  # "Antigüedad: 25 años" -> año estimado
-        antiguedad = _a_entero(caracteristicas.get("antiguedad"))
+        antiguedad = a_entero(caracteristicas.get("antiguedad"))
         if antiguedad is not None:
             anio = datetime.now().year - antiguedad
 
     texto_operacion = str(operacion.get("operation") or "")
-    if precio_valor is not None and float(precio_valor).is_integer():
-        texto = f"{int(precio_valor):,}".replace(",", ".")
-    elif precio_valor is not None:
-        texto = str(precio_valor).replace(".", ",")
-    else:
-        texto = None
-    simbolo = {"UF": "UF", "CLP": "$"}.get(precio_moneda or "", "")
-    precio_texto = f"{simbolo} {texto}" if texto is not None else None
+    precio_texto = formatear_precio(precio_valor, precio_moneda)
 
     return {
         "adid": str(data.get("idProperty")) if data.get("idProperty") else None,
@@ -204,15 +180,15 @@ def parsear_ficha(html: str) -> dict:
         "es_profesional": "corredor" in texto_operacion.lower(),
         "etiqueta": "Destacada" if operacion.get("highlighted") else None,
         "fecha_publicacion": _parsear_fecha_iso(operacion.get("publicationDate")),
-        "dormitorios": _a_entero(caracteristicas.get("dormitorios")),
-        "banos": _a_entero(caracteristicas.get("banos")),
-        "estacionamientos": _a_entero(caracteristicas.get("estacionamientos")),
+        "dormitorios": a_entero(caracteristicas.get("dormitorios")),
+        "banos": a_entero(caracteristicas.get("banos")),
+        "estacionamientos": a_entero(caracteristicas.get("estacionamientos")),
         "m2_construida": parsear_m2(caracteristicas.get("m2_construida")),
         "m2_totales": parsear_m2(caracteristicas.get("m2_totales")),
         "gastos_comunes": parsear_numero_cl(caracteristicas.get("gastos_comunes")),
         "anio_construccion": anio,
-        "piso": _a_entero(caracteristicas.get("piso")),
-        "piscina": _a_booleano_si_no(caracteristicas.get("piscina")),
+        "piso": a_entero(caracteristicas.get("piso")),
+        "piscina": a_booleano_si_no(caracteristicas.get("piscina")),
         "bodega": _parsear_bodega(caracteristicas.get("bodega")),
         "beneficios": [
             amenidad for amenidad in (data.get("amenities") or []) if amenidad

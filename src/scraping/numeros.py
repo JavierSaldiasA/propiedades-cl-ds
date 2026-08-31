@@ -69,3 +69,71 @@ def parsear_precio_texto(texto: str | None) -> tuple[float | None, str | None]:
     else:
         return (None, None)
     return (parsear_numero_cl(numero), moneda)
+
+
+def a_entero(texto) -> int | None:
+    """Primer número (entero) de un texto, o None si no calza.
+
+    "4 dormitorios" -> 4, "3" -> 3, "70.000" -> 70000. Vacío o sin dígitos
+    -> None. Es la versión consolidada de los `_a_entero` de los parsers.
+    """
+    if not texto:
+        return None
+    coincidencia = re.search(r"[\d.,]+", str(texto))
+    numero = parsear_numero_cl(coincidencia.group()) if coincidencia else None
+    return int(numero) if numero is not None else None
+
+
+def a_flotante(texto) -> float | None:
+    """float() None-safe para valores numéricos en formato US.
+
+    "80.5" -> 80.5. No usa parsear_numero_cl: aquí el punto es decimal.
+    """
+    if not texto:
+        return None
+    try:
+        return float(texto)
+    except (TypeError, ValueError):
+        return None
+
+
+def a_flotante_cl(texto) -> float | None:
+    """Primer número es-CL de un texto ("70.000 CLP" -> 70000.0)."""
+    if not texto:
+        return None
+    coincidencia = re.search(r"[\d.,]+", str(texto))
+    return parsear_numero_cl(coincidencia.group()) if coincidencia else None
+
+
+def a_booleano_si_no(texto) -> bool | None:
+    """ "Si"/"Sí" -> True, "No" -> False, otro/ausente -> None."""
+    if not texto:
+        return None
+    limpio = str(texto).strip().lower()
+    if limpio in ("si", "sí"):
+        return True
+    if limpio == "no":
+        return False
+    return None
+
+
+def formatear_precio(valor, moneda) -> str | None:
+    """Representación es-CL de un precio ("UF 16.950", "$ 400.000")."""
+    if valor is None or moneda is None:
+        return None
+    if float(valor).is_integer():
+        texto = f"{int(valor):,}".replace(",", ".")
+    else:
+        texto = str(valor).replace(".", ",")
+    simbolo = {"UF": "UF", "CLP": "$"}.get(moneda, moneda)
+    return f"{simbolo} {texto}"
+
+
+def bodega_desde_valor(valor) -> bool | None:
+    """ "2" (número de bodegas) o "Sí"/"No" -> bool."""
+    if valor is None:
+        return None
+    numero = a_entero(valor)
+    if numero is not None:
+        return numero >= 1
+    return a_booleano_si_no(valor)

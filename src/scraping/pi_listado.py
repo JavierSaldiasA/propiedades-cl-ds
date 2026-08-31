@@ -30,10 +30,13 @@ Trampas conocidas:
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
-from src.scraping.numeros import parsear_m2, parsear_numero_cl
+from src.scraping.numeros import (
+    a_entero,
+    formatear_precio,
+    parsear_m2,
+)
 from src.scraping.pi_nordic import extraer_estado_inicial
 
 BASE_URL = "https://www.portalinmobiliario.com"
@@ -104,26 +107,6 @@ def _cuerpo(componentes: dict[str, dict], tipo: str) -> dict[str, Any]:
     return cuerpo if isinstance(cuerpo, dict) else {}
 
 
-def _a_entero(texto: str | None) -> int | None:
-    if not texto:
-        return None
-    coincidencia = re.search(r"[\d.,]+", texto)
-    numero = parsear_numero_cl(coincidencia.group()) if coincidencia else None
-    return int(numero) if numero is not None else None
-
-
-def _formatear_precio(valor: float | None, moneda: str | None) -> str | None:
-    """Representación es-CL del precio ("UF 16.950", "$ 400.000")."""
-    if valor is None or moneda is None:
-        return None
-    if float(valor).is_integer():
-        texto = f"{int(valor):,}".replace(",", ".")
-    else:
-        texto = str(valor).replace(".", ",")
-    simbolo = {"UF": "UF", "CLP": "$"}.get(moneda, moneda)
-    return f"{simbolo} {texto}"
-
-
 def _parsear_atributos_tarjeta(textos: list[str]) -> dict:
     """["4 dormitorios", "4 baños", "163 m² útiles"] -> campos del registro.
 
@@ -141,9 +124,9 @@ def _parsear_atributos_tarjeta(textos: list[str]) -> dict:
     for texto in textos:
         texto = texto.strip().lower()
         if "dormitorio" in texto:
-            detalles["dormitorios"] = _a_entero(texto)
+            detalles["dormitorios"] = a_entero(texto)
         elif "baño" in texto:
-            detalles["banos"] = _a_entero(texto)
+            detalles["banos"] = a_entero(texto)
         elif "m²" in texto or "m2" in texto:
             if "total" in texto:
                 detalles["m2_totales"] = parsear_m2(texto)
@@ -208,7 +191,7 @@ def _parsear_polycard(polycard: dict[str, Any], categoria_slug: str) -> dict | N
         "tipo_operacion": tipo_operacion,
         "tipo_propiedad": tipo_propiedad,
         "titulo": _cuerpo(componentes, "title").get("text"),
-        "precio_texto": _formatear_precio(precio_valor, precio_moneda),
+        "precio_texto": formatear_precio(precio_valor, precio_moneda),
         "precio_valor": precio_valor,
         "precio_moneda": precio_moneda,
         "comuna": comuna,

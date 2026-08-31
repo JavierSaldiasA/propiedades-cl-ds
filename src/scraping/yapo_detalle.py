@@ -20,7 +20,12 @@ from datetime import date, datetime
 
 from bs4 import BeautifulSoup
 
-from src.scraping.numeros import parsear_numero_cl
+from src.scraping.numeros import (
+    a_booleano_si_no,
+    a_entero,
+    a_flotante,
+    parsear_numero_cl,
+)
 
 # Yapo usa códigos ISO 4217 en el JSON-LD: la UF aparece como "CLF".
 # Se normaliza al vocabulario del proyecto ("UF"/"CLP", ver schema.sql).
@@ -98,36 +103,6 @@ def _localidad_jsonld(oferta: dict) -> str | None:
     return direccion.get("addressLocality")
 
 
-def _a_entero(texto: str | None) -> int | None:
-    numero = parsear_numero_cl(texto)
-    return int(numero) if numero is not None else None
-
-
-def _a_flotante(texto: str | None) -> float | None:
-    """float() None-safe para atributos del detalle en formato US.
-
-    Los m² del detalle vienen en formato US (punto = decimal: "80.5"),
-    a diferencia de los precios (es-CL) -> NO usar parsear_numero_cl aquí.
-    """
-    if not texto:
-        return None
-    try:
-        return float(texto)
-    except ValueError:
-        return None
-
-
-def _a_booleano_si_no(texto: str | None) -> bool | None:
-    if not texto:
-        return None
-    limpio = texto.strip().lower()
-    if limpio in ("si", "sí"):
-        return True
-    if limpio == "no":
-        return False
-    return None
-
-
 def _parsear_fecha(texto: str | None) -> date | None:
     """Fecha "dd/mm/yyyy" -> date. None si no calza."""
     if not texto:
@@ -176,15 +151,15 @@ def parsear_detalle(html: str) -> dict:
             else None
         ),
         "fecha_publicacion": _parsear_fecha(atributos.get("Publicado")),
-        "dormitorios": _a_entero(atributos.get("Dormitorios")),
-        "banos": _a_entero(atributos.get("Baños")),
-        "estacionamientos": _a_entero(atributos.get("Estacionamientos")),
-        "m2_construida": _a_flotante(atributos.get("Área construida (m²)")),
-        "m2_totales": _a_flotante(atributos.get("M² totales")),
+        "dormitorios": a_entero(atributos.get("Dormitorios")),
+        "banos": a_entero(atributos.get("Baños")),
+        "estacionamientos": a_entero(atributos.get("Estacionamientos")),
+        "m2_construida": a_flotante(atributos.get("Área construida (m²)")),
+        "m2_totales": a_flotante(atributos.get("M² totales")),
         "gastos_comunes": parsear_numero_cl(atributos.get("Gastos comunes")),
-        "anio_construccion": _a_entero(atributos.get("Años de construcción")),
-        "piso": _a_entero(atributos.get("Piso Número")),
-        "piscina": _a_booleano_si_no(atributos.get("Piscina")),
+        "anio_construccion": a_entero(atributos.get("Años de construcción")),
+        "piso": a_entero(atributos.get("Piso Número")),
+        "piscina": a_booleano_si_no(atributos.get("Piscina")),
         "latitud": latitud,
         "longitud": longitud,
     }

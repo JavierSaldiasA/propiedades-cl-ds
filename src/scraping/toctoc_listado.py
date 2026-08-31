@@ -34,6 +34,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from src.scraping.numeros import formatear_precio
+
 # (tipo_operacion, tipo_propiedad) -> slug de categoría
 CATEGORIAS_PRINCIPALES: dict[tuple[str, str], str] = {
     ("venta", "casa"): "venta-casa",
@@ -72,17 +74,6 @@ def _parsear_fecha(texto: str | None) -> datetime | None:
         return None
 
 
-def _formatear_precio(valor: float | None, moneda: str | None) -> str | None:
-    if valor is None or moneda is None:
-        return None
-    if float(valor).is_integer():
-        texto = f"{int(valor):,}".replace(",", ".")
-    else:
-        texto = str(valor).replace(".", ",")
-    simbolo = {"UF": "UF", "CLP": "$"}.get(moneda, moneda)
-    return f"{simbolo} {texto}"
-
-
 def _elegir_precio(
     precio_publicacion: float, precio_conversion: float
 ) -> tuple[float | None, str | None]:
@@ -119,7 +110,7 @@ def _parsear_propiedad(propiedad: list) -> dict | None:
         "tipo_operacion": tipo_operacion,
         "tipo_propiedad": tipo_propiedad,
         "titulo": propiedad[39] or None,
-        "precio_texto": _formatear_precio(precio_valor, precio_moneda),
+        "precio_texto": formatear_precio(precio_valor, precio_moneda),
         "precio_valor": precio_valor,
         "precio_moneda": precio_moneda,
         "comuna": propiedad[7] or None,

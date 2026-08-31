@@ -29,7 +29,14 @@ import re
 from datetime import datetime
 from typing import Any
 
-from src.scraping.numeros import parsear_m2, parsear_numero_cl
+from src.scraping.numeros import (
+    a_booleano_si_no,
+    a_entero,
+    a_flotante,
+    a_flotante_cl,
+    bodega_desde_valor,
+    parsear_m2,
+)
 from src.scraping.pi_nordic import extraer_estado_inicial
 
 # La UF llega como "CLF" (código ISO 4217 de Mercado Libre).
@@ -100,8 +107,8 @@ def _parsear_ubicacion(
     )
     map_info = componente.get("map_info") or {}
     location = map_info.get("location") or {}
-    latitud = _a_flotante(location.get("latitude"))
-    longitud = _a_flotante(location.get("longitude"))
+    latitud = a_flotante(location.get("latitude"))
+    longitud = a_flotante(location.get("longitude"))
     # item_location: "Las Condes, RM (Metropolitana)" -> comuna, región
     item_location = map_info.get("item_location") or ""
     segmentos = [s.strip() for s in item_location.split(",")]
@@ -128,53 +135,13 @@ def _parsear_vendedor(estado: dict[str, Any]) -> str | None:
     return ((componente.get("seller_name") or {}).get("title") or {}).get("text")
 
 
-def _a_entero(texto: str | None) -> int | None:
-    if not texto:
-        return None
-    coincidencia = re.search(r"[\d.,]+", texto)
-    numero = parsear_numero_cl(coincidencia.group()) if coincidencia else None
-    return int(numero) if numero is not None else None
-
-
-def _a_flotante(texto: str | None) -> float | None:
-    """float() None-safe para valores numéricos en formato US (coords)."""
-    if not texto:
-        return None
-    try:
-        return float(texto)
-    except ValueError:
-        return None
-
-
-def _a_flotante_cl(texto: str | None) -> float | None:
-    """Primer número es-CL de un texto ("70.000 CLP" -> 70000.0)."""
-    if not texto:
-        return None
-    coincidencia = re.search(r"[\d.,]+", texto)
-    return parsear_numero_cl(coincidencia.group()) if coincidencia else None
-
-
-def _a_booleano_si_no(texto: str | None) -> bool | None:
-    if not texto:
-        return None
-    limpio = texto.strip().lower()
-    if limpio in ("si", "sí"):
-        return True
-    if limpio == "no":
-        return False
-    return None
-
-
 def _parsear_bodega(atributos: dict[str, str]) -> bool | None:
     """ "Bodegas: 1" (o "Bodega: Sí") -> bool."""
     for etiqueta in ("Bodegas", "Bodega"):
         texto = atributos.get(etiqueta)
         if texto is None:
             continue
-        numero = _a_entero(texto)
-        if numero is not None:
-            return numero >= 1
-        return _a_booleano_si_no(texto)
+        return bodega_desde_valor(texto)
     return None
 
 
@@ -209,15 +176,15 @@ def parsear_detalle(html: str) -> dict:
         "vendedor": _parsear_vendedor(estado),
         "beneficios": beneficios,
         "bodega": _parsear_bodega(atributos),
-        "dormitorios": _a_entero(atributos.get("Dormitorios")),
-        "banos": _a_entero(atributos.get("Baños")),
-        "estacionamientos": _a_entero(atributos.get("Estacionamientos")),
+        "dormitorios": a_entero(atributos.get("Dormitorios")),
+        "banos": a_entero(atributos.get("Baños")),
+        "estacionamientos": a_entero(atributos.get("Estacionamientos")),
         "m2_construida": parsear_m2(atributos.get("Superficie útil")),
         "m2_totales": parsear_m2(atributos.get("Superficie total")),
-        "gastos_comunes": _a_flotante_cl(atributos.get("Gastos comunes")),
+        "gastos_comunes": a_flotante_cl(atributos.get("Gastos comunes")),
         "anio_construccion": _parsear_anio_construccion(atributos.get("Antigüedad")),
-        "piso": _a_entero(atributos.get("Número de piso de la unidad")),
-        "piscina": _a_booleano_si_no(atributos.get("Piscina")),
+        "piso": a_entero(atributos.get("Número de piso de la unidad")),
+        "piscina": a_booleano_si_no(atributos.get("Piscina")),
         "latitud": latitud,
         "longitud": longitud,
     }
