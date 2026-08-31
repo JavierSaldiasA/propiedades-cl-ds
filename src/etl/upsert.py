@@ -11,9 +11,9 @@ import logging
 import pandas as pd
 import psycopg
 
-logger = logging.getLogger(__name__)
+from src.etl.esquema import COLUMNAS_CONFLICTO
 
-COLUMNAS_CONFLICTO = ("fuente", "url_origen")
+logger = logging.getLogger(__name__)
 
 
 def _valor_nativo(valor):

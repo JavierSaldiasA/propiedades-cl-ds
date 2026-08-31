@@ -1,10 +1,10 @@
-"""Tests de src/etl/carga.py: mapeo de valores y SQL generado (sin BD real)."""
+"""Tests de src/etl/upsert.py: mapeo de valores y SQL generado (sin BD real)."""
 
 from datetime import date
 
 import pandas as pd
 
-from src.etl.carga import _filas_nativas, _sql_upsert, _valor_nativo
+from src.etl.upsert import _filas_nativas, _sql_upsert, _valor_nativo
 
 
 def test_valor_nativo_nulos():

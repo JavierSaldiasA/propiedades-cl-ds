@@ -9,7 +9,7 @@ from src.etl.limpieza import (
     calcular_antiguedad,
     normalizar_m2,
     normalizar_precios,
-    preparar_para_carga,
+    transformar,
 )
 
 SERIE_UF = pd.Series([40000.0], index=pd.to_datetime(["2026-08-01"]))
@@ -48,10 +48,18 @@ def _df_crudo() -> pd.DataFrame:
 
 def _pipeline(df: pd.DataFrame) -> pd.DataFrame:
     """Cadena completa de limpieza, tal como la ejecuta el CLI."""
-    df = normalizar_precios(df, SERIE_UF)
-    df = normalizar_m2(df)
-    df = calcular_antiguedad(df)
-    return preparar_para_carga(df)
+    return transformar(df, "yapo", SERIE_UF)
+
+
+def test_transformar_cadena_completa():
+    """`transformar` aplica toda la cadena y deja el DF del schema."""
+    df = transformar(_df_crudo(), "yapo", SERIE_UF)
+    assert list(df.columns) == COLUMNAS_PROPERTIES
+    assert df["precio_clp_normalizado"][0] == 4000000.0
+    assert df["m2_util"][0] == 55.0
+    assert df["m2_total"][0] == 60.0
+    assert df["antiguedad_anios"][0] == 16
+    assert (df["fuente"] == "yapo").all()
 
 
 def test_normalizar_precios():

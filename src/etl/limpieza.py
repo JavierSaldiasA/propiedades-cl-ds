@@ -10,6 +10,7 @@ import logging
 
 import pandas as pd
 
+from src.etl.esquema import COLUMNAS_PROPERTIES
 from src.etl.uf import convertir_a_clp
 
 logger = logging.getLogger(__name__)
@@ -29,30 +30,6 @@ M2_MAXIMO_PLAUSIBLE = 100_000
 # blindan el NUMERIC(14,2) de la BD, que revienta con valores ≥ 10¹²
 # (500.000 UF × UF del día ≈ 2×10¹⁰ < 10¹²).
 PRECIOS_MAXIMOS_PLAUSIBLES = {"UF": 500_000, "CLP": 10_000_000_000}
-
-# Columnas de la tabla properties (docker/db/schema.sql), en orden, sin `id`
-COLUMNAS_PROPERTIES = [
-    "fuente",
-    "url_origen",
-    "tipo_operacion",
-    "tipo_propiedad",
-    "precio_valor",
-    "precio_moneda",
-    "precio_clp_normalizado",
-    "m2_util",
-    "m2_total",
-    "gastos_comunes",
-    "dormitorios",
-    "banos",
-    "estacionamientos",
-    "bodega",
-    "comuna",
-    "region",
-    "antiguedad_anios",
-    "descripcion",
-    "fecha_publicacion",
-    "fecha_scraping",
-]
 
 
 def _anular_precios_implausibles(df: pd.DataFrame) -> pd.DataFrame:
@@ -160,3 +137,16 @@ def preparar_para_carga(df: pd.DataFrame, fuente: str = FUENTE_YAPO) -> pd.DataF
         df = df.drop_duplicates(subset=["fuente", "url_origen"], keep="last")
 
     return df[COLUMNAS_PROPERTIES].reset_index(drop=True)
+
+
+def transformar(df: pd.DataFrame, fuente: str, serie_uf: pd.Series) -> pd.DataFrame:
+    """Cadena completa del ETL: parquet crudo -> DataFrame listo para la tabla.
+
+    Aplica, en orden: normalización de precios (UF->CLP), m², antigüedad y
+    preparación para carga (fuente, dedup, selección de columnas). Devuelve el
+    DataFrame con las columnas del schema `properties`.
+    """
+    df = normalizar_precios(df, serie_uf)
+    df = normalizar_m2(df)
+    df = calcular_antiguedad(df)
+    return preparar_para_carga(df, fuente=fuente)

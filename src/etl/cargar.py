@@ -17,18 +17,12 @@ import pandas as pd
 import psycopg
 
 from src.config import obtener_configuraciones
-from src.etl.carga import cargar_properties
-from src.etl.limpieza import (
-    calcular_antiguedad,
-    normalizar_m2,
-    normalizar_precios,
-    preparar_para_carga,
-)
+from src.etl.esquema import RUTA_SCHEMA, generar_schema
+from src.etl.limpieza import transformar
 from src.etl.uf import obtener_serie_uf
+from src.etl.upsert import cargar_properties
 
 logger = logging.getLogger(__name__)
-
-RUTA_SCHEMA = Path("docker/db/schema.sql")
 
 # Fuente -> directorio del parquet crudo (los scrapers escriben las
 # mismas columnas, así que el ETL es idéntico para todos).
@@ -78,11 +72,11 @@ def _ultimo_run_id(directorio_raw: Path) -> str | None:
 
 
 def _aplicar_schema(url_database: str) -> None:
-    sql = RUTA_SCHEMA.read_text(encoding="utf-8")
+    sql = generar_schema()
     with psycopg.connect(url_database) as conexion:
         with conexion.cursor() as cursor:
             cursor.execute(sql)
-    logger.info("Schema aplicado desde %s", RUTA_SCHEMA)
+    logger.info("Schema aplicado desde la spec (%s)", RUTA_SCHEMA)
 
 
 def _verificar_tabla(url_database: str) -> None:
@@ -148,10 +142,7 @@ def _procesar_fuente(
     df: pd.DataFrame, fuente: str, serie_uf: pd.Series, url_database: str
 ) -> None:
     """Fase 3 (BD): cadena del ETL + upsert para una fuente."""
-    df = normalizar_precios(df, serie_uf)
-    df = normalizar_m2(df)
-    df = calcular_antiguedad(df)
-    df = preparar_para_carga(df, fuente=fuente)
+    df = transformar(df, fuente, serie_uf)
     logger.info("Fuente %s: %d filas listas para carga", fuente, len(df))
     cargar_properties(df, url_database)
 
