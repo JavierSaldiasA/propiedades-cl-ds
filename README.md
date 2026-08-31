@@ -88,11 +88,34 @@ sin BD). Reglas actuales:
 
 ## 5. Ingeniería de variables
 
-🚧 *En desarrollo.* Variables planeadas:
+Implementado en `src/features/` (funciones puras DataFrame → DataFrame, testeadas
+sin BD). Transformaciones que toma la tabla `properties` limpia para dejarla
+lista para modelar:
 
-- `precio_clp_normalizado` y precio por m².
-- Antigüedad derivada de la fecha de publicación.
-- Variables geográficas por `comuna` (distancia a metro y similares quedan para cuando se incorpore geocodificación).
+- **Target**: `precio_log = log1p(precio_clp_normalizado)` (cola larga confirmada
+  en el EDA). Se descartan avisos sin precio válido (`<= 0` o ausente).
+- **Precio por m²**: `precio_por_m2_util` y `precio_por_m2_total` (NA si m² = 0 o falta).
+- **Indicadores de nulos**: flag binario `sin_<columna>` para las columnas con
+  ausencia informativa (`m2_util`, `m2_total`, `gastos_comunes`,
+  `estacionamientos`, `antiguedad_anios`, `bodega`).
+- **Imputación** de las numéricas (`m2_util`, `m2_total`, `banos`, `dormitorios`,
+  `estacionamientos`, `antiguedad_anios`) con la **mediana por comuna** (el
+  efecto geográfico es el más informativo del EDA), con fallback a la mediana
+  global si la comuna no tiene datos.
+- **Encodings**:
+  - `comuna` → **target-mean encoding con smoothing** (promedio ponderado entre
+    media local y media global). Las comunas raras (< 20 avisos) se funden en
+    `comuna_otra` (su estimación es ruido con tan poca evidencia).
+  - `tipo_propiedad` y `fuente` → one-hot.
+- **Outliers de precio**: método **IQR sobre el log** del precio (k = 3); se
+  aplica al ajustar (fit), no al hacer score, porque con una sola fila el IQR
+  degeneraría.
+- **Patrón fit/transform sin data leakage**: `calcular_setup(df)` calcula una
+  sola vez medianas, encodings y umbrales; `construir_matriz(df, setup)` los
+  aplica igual en entrenamiento y en score. El setup se persiste junto al modelo.
+
+Las variables geográficas finas (distancia a metro y similares) quedan para
+cuando se incorpore la geocodificación.
 
 ## 6. Modelado
 
@@ -125,7 +148,9 @@ validación cruzada y, si el volumen lo permite, separación temporal
 - [x] Fase 1: scraper de Yapo Propiedades + ETL inicial a Supabase
 - [x] Scraper de Portal Inmobiliario (avisos individuales)
 - [x] Scraper de TOCTOC (propiedades usadas, vía API interna)
-- [ ] EDA en `notebooks/` y modelo baseline
+- [x] EDA en `notebooks/`
+- [x] Feature engineering en `src/features/`
+- [ ] Modelo baseline (Fase 4)
 - [ ] API de valoración y frontend Streamlit
 - [ ] Geocodificación (Nominatim/OSM) para granularidad geográfica fina
 - [ ] Fase 5: orquestación de scrapers con GitHub Actions, reentrenamiento automático y migración a React + TypeScript
