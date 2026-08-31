@@ -1,5 +1,15 @@
-# Las dependencias se instalan desde requirements.txt y requirements-dev.txt.
-# Este archivo solo guarda la configuración de herramientas.
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "propiedades-cl-ds"
+version = "0.1.0"
+description = "Estimación de precios justos de propiedades en Chile"
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+include = ["src*"]
 
 [tool.black]
 line-length = 88

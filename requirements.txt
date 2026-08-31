@@ -7,6 +7,11 @@ beautifulsoup4
 pandas
 pyarrow
 
+# Visualización
+matplotlib
+seaborn
+plotly
+
 # Indicadores económicos
 bcchapi
 
