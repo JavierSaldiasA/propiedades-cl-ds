@@ -4,7 +4,7 @@ Estimación del precio justo de propiedades en el mercado inmobiliario chileno,
 detección de publicaciones sub/sobrevaloradas y recomendación de propiedades
 similares, a partir de datos scrapeados de portales públicos.
 
-> 🚧 Proyecto en desarrollo — las secciones 5 a 8 se completarán a medida que avancen las fases.
+> ✓ Proyecto con baseline funcional — las secciones 7 y 8 se completan con la mejora de modelos.
 
 ## 1. Problema
 
@@ -119,21 +119,72 @@ cuando se incorpore la geocodificación.
 
 ## 6. Modelado
 
-🚧 *En desarrollo.* Enfoque:
+Implementado en `src/modelo/`. Pipeline de entrenamiento (`python -m src.modelo.entrenar`),
+que lee de Supabase, ajusta el setup global y valida con **CV honesto**:
 
-- Baseline con scikit-learn; modelos finales LightGBM / XGBoost (datos tabulares, dataset pequeño-mediano).
-- Interpretabilidad con SHAP.
-- Entrenamiento offline y serialización; la API carga el modelo y no reentrena por request.
+- **Validación cruzada honesta**: el target-mean encoding de `comuna` se recalcula
+  dentro de cada fold (`construir_matrices_fold`), de modo que el target de la
+  validación nunca entra en los features con los que se predice. El setup global
+  (medianas de imputación, one-hot, umbrales, outliers de precio) se ajusta una
+  sola vez sobre todo el dataset y se persiste junto al modelo.
+- **Baselines comparados** por fold y agregados (mejor por MAPE): el trivial
+  `mediana` (piso que cualquier modelo debe superar), `ridge` (regresión lineal
+  regularizada con escalado estandarizado), `RandomForestRegressor` y
+  `HistGradientBoostingRegressor`.
+- **Winsorización**: las features numéricas se recortan a los percentiles
+  1-99 % calculados sobre el dataset (como el resto del setup global). Sin este
+  recorte, las colas pesadas de los datos reales (gastos comunes o m² extremos)
+  hacen explotar la extrapolación de los modelos lineales.
+- **Features excluidas**: `precio_por_m2_util`/`precio_por_m2_total` quedan fuera
+  de la matriz porque se derivan del mismo precio que es el target (el modelo
+  podría reconstruirlo como una tautología y las métricas dejarían de medir
+  capacidad de predicción).
+- **Artefacto**: `models/modelo_venta.joblib` y `models/modelo_arriendo.joblib`
+  (uno por operación; no se sobrescriben entre sí), con modelo + setup + clip +
+  columnas + resultados del CV y los metadatos; la API los carga y hace score sin
+  reentrenar.
+
+El baseline es scikit-learn por ahora; la interpretabilidad con SHAP y el salto a
+LightGBM/XGBoost quedan para la mejora de modelos.
 
 ## 7. Métricas
 
-🚧 *Pendiente.* Se reportarán MAE, RMSE y MAPE del modelo de valoración, con
-validación cruzada y, si el volumen lo permite, separación temporal
-(entrenar con publicaciones antiguas, evaluar con recientes).
+Reportadas con validación cruzada (KFold, target encoding por fold), en el espacio
+del log (donde se entrena) y en CLP (donde se interpreta el error de una valoración):
+
+- **MAE**, **RMSE** y **R²** sobre `log1p(precio)`.
+- **MAE CLP**, **RMSE CLP** y **MAPE (%)** sobre los precios (se deshace el log con `expm1`).
+
+Corrida baseline (2026-09-01, 5 folds, semilla 42).
+
+**Venta** (3.328 avisos, mejor modelo: **HistGradientBoosting**):
+
+| Modelo | MAPE | MAE CLP | RMSE CLP | R² (log) |
+| --- | --- | --- | --- | --- |
+| HistGradientBoosting | **22,9%** ± 1,8 | 114,3M | 222,2M | 0,86 |
+| RandomForest | 23,7% ± 1,9 | 116,6M | 223,2M | 0,86 |
+| Ridge (lineal escalado) | 32,7% ± 1,4 | 163,6M | 296,8M | 0,76 |
+| Mediana (trivial) | 94,0% ± 3,3 | 309,1M | 471,6M | −0,01 |
+
+**Arriendo** (3.321 avisos, mejor modelo: **RandomForest**):
+
+| Modelo | MAPE | MAE CLP | RMSE CLP | R² (log) |
+| --- | --- | --- | --- | --- |
+| RandomForest | **25,5%** ± 3,3 | 331,4K | 1,05M | 0,85 |
+| HistGradientBoosting | 26,9% ± 4,0 | 343,7K | 1,05M | 0,84 |
+| Ridge (lineal escalado) | 29,2% ± 1,0 | 400,8K | 1,16M | 0,81 |
+| Mediana (trivial) | 60,4% ± 2,6 | 848,8K | 1,91M | −0,06 |
+
+La separación temporal (entrenar con publicaciones antiguas, evaluar con recientes)
+queda como mejora cuando el volumen y las fechas de publicación lo permitan.
 
 ## 8. Resultados
 
-🚧 *Pendiente de las fases de modelado.*
+🚧 *Pendiente de la mejora de modelos.* El baseline sitúa el MAPE de la valoración
+en ~23 % (venta) y en ~25 % (arriendo), con el que hoy rinde mejor por operación
+(HistGradientBoosting en venta, RandomForest en arriendo); la detección de
+sub/sobrevaloración y las recomendaciones de propiedades similares se desencadenan
+sobre los residuos de estos modelos.
 
 ## 9. Limitaciones
 
@@ -150,7 +201,8 @@ validación cruzada y, si el volumen lo permite, separación temporal
 - [x] Scraper de TOCTOC (propiedades usadas, vía API interna)
 - [x] EDA en `notebooks/`
 - [x] Feature engineering en `src/features/`
-- [ ] Modelo baseline (Fase 4)
+- [x] Modelo baseline (Fase 4) con CV honesto en `src/modelo/`
+- [ ] Mejora de modelos (LightGBM/XGBoost, SHAP, separación temporal)
 - [ ] API de valoración y frontend Streamlit
 - [ ] Geocodificación (Nominatim/OSM) para granularidad geográfica fina
 - [ ] Fase 5: orquestación de scrapers con GitHub Actions, reentrenamiento automático y migración a React + TypeScript
@@ -177,7 +229,7 @@ python -m venv .venv
 source .venv/bin/activate
 
 # 3. Instalar dependencias (incluye herramientas de desarrollo)
-pip install -r requirements-dev.txt
+pip install -e ".[dev]"
 
 # 4. (Opcional) Navegador de fallback para el scraper — solo si httpx
 #    llegara a ser bloqueado por anti-bot
@@ -217,15 +269,37 @@ python -m src.etl.cargar                           # última corrida de cada fue
 python -m src.etl.cargar --fuente toctoc
 python -m src.etl.cargar --fuente yapo --run-id 20260807_104024  # corrida específica
 
+# Entrenamiento del modelo baseline (lee `venta`/`arriendo` de Supabase).
+# Evalúa los baselines con CV honesto y guarda el artefacto por operación:
+#   models/modelo_venta.joblib / models/modelo_arriendo.joblib
+python -m src.modelo.entrenar                              # venta, 5 folds
+python -m src.modelo.entrenar --tipo-operacion arriendo --folds 5 --semilla 42
+
 # API y frontend: 🚧 en desarrollo. Cuando existan, se correrán así:
 # uvicorn api.main:app --reload
 # streamlit run app/main.py
+
+# API en Docker (imagen multi-stage en docker/Dockerfile; requiere .env):
+# make docker-up   (Linux) / ./tasks.ps1 docker-up   (Windows)
 ```
 
 ### Desarrollo
 
+Las rutas de datos y config se resuelven desde la raíz del repo (no desde el
+directorio de invocación); se puede sobrescribir con `PROPIEDADES_ROOT`.
+
 ```bash
-pytest          # tests
-ruff check .    # linter + orden de imports
-black .         # formato
+./tasks.ps1 ci        # Windows: ruff + black --check + pytest (con coverage)
+make ci               # Linux/CI: lo mismo
+make install          # o: ./tasks.ps1 install (pip install -e ".[dev]")
+make hooks            # o: ./tasks.ps1 hooks (instala los pre-commit git hooks)
+
+# Equivalencias manuales
+pytest -q             # tests + reporte de coverage
+ruff check src tests  # linter + orden de imports
+black src tests       # formato
 ```
+
+El workflow de CI (`.github/workflows/ci.yml`) corre los mismos checks
+(python 3.11 y 3.14). El pre-commit (`ruff`, `black`, hooks útiles) se instala
+con `make hooks` / `./tasks.ps1 hooks`.
