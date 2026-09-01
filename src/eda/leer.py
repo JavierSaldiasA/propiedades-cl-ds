@@ -14,9 +14,21 @@ from src.config import obtener_configuraciones
 
 FECHA_COLUMNAS = ("fecha_publicacion", "fecha_scraping")
 # Los NUMERIC de Postgres llegan como str; se convierten a float64.
-NUMERICAS = ("precio_valor", "precio_clp_normalizado", "m2_util", "m2_total",
-             "gastos_comunes")
+NUMERICAS = (
+    "precio_valor",
+    "precio_clp_normalizado",
+    "m2_util",
+    "m2_total",
+    "gastos_comunes",
+)
 BOOLEANAS = ("bodega",)
+
+# Consulta parametrizada: `tipo_operacion` se pasa como placeholder (%s), nunca
+# interpolado en el string, para evitar inyección SQL.
+SQL_PROPIEDADES = (
+    "SELECT * FROM properties WHERE tipo_operacion = %s "
+    "ORDER BY fuente, fecha_scraping"
+)
 
 
 def cargar_properties(tipo_operacion: str) -> pd.DataFrame:
@@ -27,10 +39,9 @@ def cargar_properties(tipo_operacion: str) -> pd.DataFrame:
     una lectura estable.
     """
     url_database = obtener_configuraciones().url_database
-    consulta = f"SELECT * FROM properties WHERE tipo_operacion = '{tipo_operacion}' ORDER BY fuente, fecha_scraping"
     with psycopg.connect(url_database) as conexion:
         with conexion.cursor() as cursor:
-            cursor.execute(consulta)
+            cursor.execute(SQL_PROPIEDADES, (tipo_operacion,))
             columnas = [d[0] for d in cursor.description]
             filas = cursor.fetchall()
     df = pd.DataFrame(filas, columns=columnas)
