@@ -5,15 +5,18 @@ import pandas as pd
 import pytest
 
 from src.features.construir import (
+    _estadisticos_encoding,
     agregar_indicadores_faltantes,
     calcular_setup,
     codificar_categorias,
+    construir_matrices_fold,
     construir_matriz,
     crear_precio_por_m2,
     crear_target,
     filtrar_outliers_precio,
     imputar_numericas,
     limpiar_precio,
+    setup_encoding_por_fold,
 )
 
 
@@ -192,3 +195,100 @@ def test_construir_matriz_transform_consistente_con_fit():
     x_score = construir_matriz(df, setup=setup)
     # Mismas columnas y por lo tanto el modelo puede reutilizarse.
     assert list(x_score.columns) == list(x_train.columns)
+
+
+def _df_sin_outliers_precio():
+    """Fixture con precios homogéneos (sin outliers de IQR)."""
+    df = _df_fixture()
+    df["precio_clp_normalizado"] = [100_000_000] * len(df)
+    return df
+
+
+def test_estadisticos_encoding_medias_por_grupo():
+    objetivo = pd.Series([10.0, 20.0, np.nan, 30.0, 40.0])
+    comuna = pd.Series(["a", "a", "a", "b", "b"])
+    media, stats = _estadisticos_encoding(objetivo, comuna)
+    assert media == pytest.approx(25.0)
+    assert stats["a"] == (15.0, 2)  # media(10,20); n=2
+    assert stats["b"] == (35.0, 2)
+
+
+def test_setup_encoding_por_fold_no_usa_objetivo_de_validacion():
+    df = _df_fixture()
+    df = pd.concat([df] * 12, ignore_index=True)
+    df["comuna"] = ["Las Condes"] * 30 + ["Santiago"] * 20 + ["Otra"] * 10
+    # El objetivo depende de la comuna: Las Condes 100M, Santiago 1M
+    df["precio_clp_normalizado"] = [
+        (100_000_000 if c == "Las Condes" else 1_000_000) for c in df["comuna"]
+    ]
+    df = crear_target(df)
+    setup = calcular_setup(df)
+
+    train = df[df["comuna"] == "Santiago"]  # todas las Las Condes fuera del train
+    setup_fold = setup_encoding_por_fold(setup, train["precio_log"], train["comuna"])
+    # En el train no hay Las Condes -> su encoding cae al prior del train (1M)
+    mapa = {
+        nombre: (local[0] * local[1] + setup_fold["target_media"] * 20)
+        / (local[1] + 20)
+        for nombre, local in setup_fold["comuna_target_stats"].items()
+    }
+    # "Las Condes" no tiene stats en el fold; se codificará con el prior (NA):
+    assert "Las Condes" not in setup_fold["comuna_target_stats"]
+    prior = setup_fold["target_media"]
+    assert prior == pytest.approx(np.log1p(1_000_000))
+    # El encoding del fold difiere del global: en el it setup global Las Condes
+    # veía su propio target (100M), aquí no.
+    assert mapa["Santiago"] != setup["target_media"]
+
+
+def test_construir_matrices_fold_aplica_encoding_honesto():
+    df = _df_fixture()
+    df = pd.concat([df] * 12, ignore_index=True)
+    df["comuna"] = ["Las Condes"] * 30 + ["Santiago"] * 20 + ["Otra"] * 10
+    df["precio_clp_normalizado"] = [
+        (100_000_000 if c == "Las Condes" else 1_000_000) for c in df["comuna"]
+    ]
+    df = crear_target(df)
+    setup = calcular_setup(df)
+
+    train = df[df["comuna"] == "Santiago"].copy()
+    val = df[df["comuna"] == "Las Condes"].copy()
+    x_train, y_train, x_val, y_val = construir_matrices_fold(train, val, setup)
+
+    assert len(y_train) == len(train)
+    assert len(y_val) == len(val)
+    # Las columnas de train y val coinciden (el modelo es reutilizable).
+    assert list(x_val.columns) == list(x_train.columns)
+    # La comuna de validación (Las Condes) no está en el train del fold, así
+    # que su encoding es el prior del *train* del fold (log1p(1M)), NO su
+    # propio precio (100M): si usara las stats del fit global habría leakage.
+    prior_fold = setup_encoding_por_fold(setup, train["precio_log"], train["comuna"])[
+        "target_media"
+    ]
+    assert x_val["comuna_enc"].iloc[0] == pytest.approx(prior_fold)
+    assert x_val["comuna_enc"].iloc[0] == pytest.approx(np.log1p(1_000_000))
+    assert x_val["comuna_enc"].iloc[0] != pytest.approx(np.log1p(100_000_000))
+
+
+def test_construir_matrices_fold_con_comunas_raras_en_validacion():
+    df = _df_fixture()
+    df = pd.concat([df] * 12, ignore_index=True)
+    df["comuna"] = ["Las Condes"] * 30 + ["Santiago"] * 20 + ["Otra"] * 10
+    df["precio_clp_normalizado"] = [
+        (100_000_000 if c == "Las Condes" else 1_000_000) for c in df["comuna"]
+    ]
+    df = crear_target(df)
+    setup = calcular_setup(df)
+    # El fold entrena sin las comunas raras: la validación (todas raras) debe
+    # caer al prior del train del fold, no a un encoding propio.
+    train = df[df["comuna"] != "Otra"].copy()
+    val = df[df["comuna"] == "Otra"].copy()
+    _, _, x_val, _ = construir_matrices_fold(train, val, setup)
+
+    assert "comuna_enc" in x_val.columns
+    # La comuna rara se fundió en comuna_otra (sin stats en el fold-train)
+    # -> encoding = prior del train (log1p de la mezcla LC/Stgo).
+    prior_fold = setup_encoding_por_fold(setup, train["precio_log"], train["comuna"])[
+        "target_media"
+    ]
+    assert x_val["comuna_enc"].iloc[0] == pytest.approx(prior_fold)

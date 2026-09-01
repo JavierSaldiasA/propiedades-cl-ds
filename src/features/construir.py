@@ -145,6 +145,76 @@ def _agrupar_comunas_raras(df: pd.DataFrame, setup: dict[str, Any]) -> pd.DataFr
     return out
 
 
+def _estadisticos_encoding(
+    y: pd.Series, comuna: pd.Series
+) -> tuple[float, dict[str, tuple[float, int]]]:
+    """Media global y (media, n) por comuna para el target-mean encoding.
+
+    Se calculan sobre el conjunto indicado (el de entrenamiento de un fold en
+    CV): usarlos sobre datos que participan en la evaluación filtraría el
+    target hacia el feature (data leakage).
+    """
+    objetivo = pd.to_numeric(y, errors="coerce")
+    target_media = float(objetivo.mean())
+    stats: dict[str, tuple[float, int]] = {}
+    for g, sub in objetivo.to_frame("_objetivo").groupby(comuna.astype(str)):
+        n = int(sub["_objetivo"].notna().sum())
+        if n:
+            stats[str(g)] = (float(sub["_objetivo"].mean()), n)
+    return target_media, stats
+
+
+def setup_encoding_por_fold(
+    setup: dict[str, Any],
+    y_entrenamiento: pd.Series,
+    comuna_entrenamiento: pd.Series,
+) -> dict[str, Any]:
+    """Setup para un fold: estadísticas del target encoding SOLO del train.
+
+    El resto del setup (medianas, one-hot, umbrales) viene del fit global,
+    pero `target_media`/`comuna_target_stats` se recalculan sobre las filas
+    que entrenan ese fold, para que el encoding de las filas de validación
+    no haya visto su propio target (leakage en CV). Aplica la misma fusión
+    de comunas raras en `comuna_otra`.
+    """
+    out = dict(setup)
+    comuna = comuna_entrenamiento.astype(str)
+    frecuentes = set(setup.get("comunas_frecuentes", []))
+    if frecuentes:
+        comuna = comuna.where(comuna.isin(frecuentes), config.CATEGORIA_COMUNA_OTRA)
+    target_media, stats = _estadisticos_encoding(y_entrenamiento, comuna)
+    out["target_media"] = target_media
+    out["comuna_target_stats"] = stats
+    return out
+
+
+def construir_matrices_fold(
+    df_entrenamiento: pd.DataFrame,
+    df_validacion: pd.DataFrame,
+    setup: dict[str, Any],
+) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]:
+    """Matrices (X, y) de un fold con target encoding honesto.
+
+    Recalcula las estadísticas del encoding de `comuna` sobre
+    `df_entrenamiento` del fold y aplica ese mismo setup a entrenamiento y
+    validación; el resto del setup (medianas de imputación, one-hot,
+    umbrales) reutiliza el global del fit. Devuelve
+    (X_train, y_train, X_val, y_val).
+    """
+    setup_fold = setup_encoding_por_fold(
+        setup,
+        df_entrenamiento[config.COLUMNA_TARGET],
+        df_entrenamiento["comuna"],
+    )
+    x_entrenamiento, y_entrenamiento, _ = construir_matriz(
+        df_entrenamiento, setup=setup_fold, entrenamiento=True
+    )
+    x_validacion, y_validacion, _ = construir_matriz(
+        df_validacion, setup=setup_fold, entrenamiento=True
+    )
+    return x_entrenamiento, y_entrenamiento, x_validacion, y_validacion
+
+
 def codificar_comuna(df: pd.DataFrame, setup: dict[str, Any]) -> pd.DataFrame:
     """Target-mean encoding con smoothing para `comuna`.
 
@@ -253,14 +323,12 @@ def calcular_setup(
     comuna_agrupada = comunas.where(
         comunas.isin(comunas_frecuentes), config.CATEGORIA_COMUNA_OTRA
     )
-    target_media = float(objetivo.mean())
-    comuna_target_stats: dict[str, tuple[float, int]] = {}
+    target_media, comuna_target_stats = _estadisticos_encoding(
+        objetivo, comuna_agrupada
+    )
     comuna_conteos: dict[str, int] = {}
     for g, sub in objetivo.to_frame(config.COLUMNA_TARGET).groupby(comuna_agrupada):
-        n = int(sub[config.COLUMNA_TARGET].notna().sum())
-        comuna_conteos[str(g)] = n
-        if n:
-            comuna_target_stats[str(g)] = (float(sub[config.COLUMNA_TARGET].mean()), n)
+        comuna_conteos[str(g)] = int(sub[config.COLUMNA_TARGET].notna().sum())
 
     categorias: dict[str, list[str]] = {}
     for col in config.CATEGORICAS_ONEHOT:
