@@ -34,7 +34,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from src.scraping.numeros import formatear_precio
+from src.scraping.numeros import a_flotante, a_flotante_cl, formatear_precio
 
 # (tipo_operacion, tipo_propiedad) -> slug de categoría
 CATEGORIAS_PRINCIPALES: dict[tuple[str, str], str] = {
@@ -74,6 +74,20 @@ def _parsear_fecha(texto: str | None) -> datetime | None:
         return None
 
 
+def _numerico(valor) -> float:
+    """Float defensivo para el arreglo posicional (0.0 si no es numérico).
+
+    El API entrega precios como números, pero es un arreglo compacto sin
+    tipos fijos: si llegara un string lo tratamos con formato es-CL
+    ("500.000" -> 500000.0) en vez de dejar que float() explote.
+    """
+    if isinstance(valor, str):
+        numero = a_flotante_cl(valor)
+    else:
+        numero = a_flotante(valor)
+    return numero if numero is not None else 0.0
+
+
 def _elegir_precio(
     precio_publicacion: float, precio_conversion: float
 ) -> tuple[float | None, str | None]:
@@ -101,7 +115,7 @@ def _parsear_propiedad(propiedad: list) -> dict | None:
     if not tipo_operacion or not tipo_propiedad:
         return None
     precio_valor, precio_moneda = _elegir_precio(
-        float(propiedad[22] or 0), float(propiedad[24] or 0)
+        _numerico(propiedad[22]), _numerico(propiedad[24])
     )
     return {
         "adid": str(propiedad[1]),

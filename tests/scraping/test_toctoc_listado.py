@@ -160,3 +160,56 @@ def test_parsear_listado_respuesta_vacia():
     assert parsear_listado({}) == []
     assert parsear_total({}) is None
     assert hay_siguiente_pagina({}) is False
+
+
+def _arreglo(precio_publicacion, precio_conversion) -> list:
+    """Arreglo posicional mínimo (41 campos) de una casa en venta en UF."""
+    campos = [0] * 41
+    campos[1] = "999"
+    campos[2] = -70.65
+    campos[3] = -33.43
+    campos[4] = 2  # [4] baños
+    campos[7] = "Maipú"
+    campos[8] = 3  # [8] dormitorios
+    campos[14] = "25-06-2026 0:00:00"  # [14] fecha
+    campos[22] = precio_publicacion  # [22] precio de publicación
+    campos[24] = precio_conversion  # [24] conversión
+    campos[31] = 0.0
+    campos[33] = 120.0
+    campos[39] = "Casa en venta"
+    campos[40] = "https://www.toctoc.com/propiedades/compra/casa/maipu/casa-x/999"
+    return campos
+
+
+def test_parsear_listado_precios_como_texto_es_cl():
+    """Precios como string es-CL ("2.900") se normalizan como números."""
+    respuesta = {
+        "resultados": {
+            "Total": 1,
+            "Pagina": 1,
+            "TotalPorPagina": 510,
+            "Propiedades": [
+                _arreglo(precio_publicacion="2.900", precio_conversion="118.500")
+            ],
+        }
+    }
+    aviso = parsear_listado(respuesta)[0]
+    assert aviso["precio_valor"] == 2900.0
+    assert aviso["precio_moneda"] == "UF"  # conversión > original
+
+
+def test_parsear_listado_precio_no_numerico_no_rompe():
+    """Un precio no numérico cae a None y no lanza ValueError."""
+    respuesta = {
+        "resultados": {
+            "Total": 1,
+            "Pagina": 1,
+            "TotalPorPagina": 510,
+            "Propiedades": [
+                _arreglo(precio_publicacion="sin-dato", precio_conversion="sin-dato")
+            ],
+        }
+    }
+    aviso = parsear_listado(respuesta)[0]
+    assert aviso["precio_valor"] is None
+    assert aviso["precio_moneda"] is None

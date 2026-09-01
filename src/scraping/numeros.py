@@ -7,6 +7,15 @@ En formato es-CL el punto es separador de miles y la coma es decimal:
 from __future__ import annotations
 
 import re
+from typing import Any
+
+# Primer número (posiblemente con separadores es-CL) dentro de un texto.
+PATRON_NUMERO = re.compile(r"[\d\.,]+")
+
+# Normalización de monedas: los portales usan códigos distintos para la UF
+# (p. ej. "CLF", ISO 4217, en Yapo y Portal Inmobiliario). Vocabulario del
+# proyecto: "UF"/"CLP" (ver schema.sql).
+MONEDAS = {"CLF": "UF"}
 
 
 def parsear_numero_cl(texto: str | None) -> float | None:
@@ -38,7 +47,7 @@ def parsear_m2(texto: str | None) -> float | None:
     """
     if not texto:
         return None
-    coincidencia = re.search(r"[\d.,]+", texto)
+    coincidencia = PATRON_NUMERO.search(texto)
     if not coincidencia:
         return None
     numero = coincidencia.group()
@@ -71,7 +80,7 @@ def parsear_precio_texto(texto: str | None) -> tuple[float | None, str | None]:
     return (parsear_numero_cl(numero), moneda)
 
 
-def a_entero(texto) -> int | None:
+def a_entero(texto: Any) -> int | None:
     """Primer número (entero) de un texto, o None si no calza.
 
     "4 dormitorios" -> 4, "3" -> 3, "70.000" -> 70000. Vacío o sin dígitos
@@ -79,12 +88,12 @@ def a_entero(texto) -> int | None:
     """
     if not texto:
         return None
-    coincidencia = re.search(r"[\d.,]+", str(texto))
+    coincidencia = PATRON_NUMERO.search(str(texto))
     numero = parsear_numero_cl(coincidencia.group()) if coincidencia else None
     return int(numero) if numero is not None else None
 
 
-def a_flotante(texto) -> float | None:
+def a_flotante(texto: Any) -> float | None:
     """float() None-safe para valores numéricos en formato US.
 
     "80.5" -> 80.5. No usa parsear_numero_cl: aquí el punto es decimal.
@@ -97,15 +106,15 @@ def a_flotante(texto) -> float | None:
         return None
 
 
-def a_flotante_cl(texto) -> float | None:
+def a_flotante_cl(texto: Any) -> float | None:
     """Primer número es-CL de un texto ("70.000 CLP" -> 70000.0)."""
     if not texto:
         return None
-    coincidencia = re.search(r"[\d.,]+", str(texto))
+    coincidencia = PATRON_NUMERO.search(str(texto))
     return parsear_numero_cl(coincidencia.group()) if coincidencia else None
 
 
-def a_booleano_si_no(texto) -> bool | None:
+def a_booleano_si_no(texto: Any) -> bool | None:
     """ "Si"/"Sí" -> True, "No" -> False, otro/ausente -> None."""
     if not texto:
         return None
@@ -117,7 +126,7 @@ def a_booleano_si_no(texto) -> bool | None:
     return None
 
 
-def formatear_precio(valor, moneda) -> str | None:
+def formatear_precio(valor: Any, moneda: Any) -> str | None:
     """Representación es-CL de un precio ("UF 16.950", "$ 400.000")."""
     if valor is None or moneda is None:
         return None
@@ -129,7 +138,7 @@ def formatear_precio(valor, moneda) -> str | None:
     return f"{simbolo} {texto}"
 
 
-def bodega_desde_valor(valor) -> bool | None:
+def bodega_desde_valor(valor: Any) -> bool | None:
     """ "2" (número de bodegas) o "Sí"/"No" -> bool."""
     if valor is None:
         return None

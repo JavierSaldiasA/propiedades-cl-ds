@@ -75,3 +75,25 @@ def test_descargar_reintenta_y_agota_5xx(monkeypatch):
     assert esperas == [
         ESPERA_BACKOFF_BASE * 2**i for i in range(2)
     ]  # backoff exponencial entre reintentos
+
+
+def test_descargar_error_de_red_reintenta_y_relanza(monkeypatch):
+    """La red caída no es un bloqueo: se relanza el error original al agotar."""
+    llamadas = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        llamadas["n"] += 1
+        raise httpx.ConnectError("sin conexión")
+
+    esperas: list[float] = []
+    monkeypatch.setattr(
+        "src.scraping.cliente_http.time.sleep", lambda s: esperas.append(s)
+    )
+    with httpx.Client(transport=httpx.MockTransport(handler)) as cliente:
+        with pytest.raises(httpx.ConnectError):
+            descargar("https://ejemplo.cl/x", cliente)
+
+    assert llamadas["n"] == 3
+    assert esperas == [
+        ESPERA_BACKOFF_BASE * 2**i for i in range(2)
+    ]  # mismo backoff exponencial que en 5xx

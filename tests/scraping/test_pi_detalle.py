@@ -3,7 +3,18 @@
 import json
 from datetime import datetime
 
-from src.scraping.pi_detalle import parsear_detalle
+from src.scraping.pi_detalle import _parsear_anio_construccion, parsear_detalle
+
+
+def test_anio_construccion_determinista_con_anio_inyectado():
+    """Con anio_actual fijo el resultado no depende del reloj."""
+    assert _parsear_anio_construccion("Antigüedad: 54 años", anio_actual=2026) == 1972
+    assert _parsear_anio_construccion("Sin dato", anio_actual=2026) is None
+
+
+def test_parsear_detalle_anio_inyectado(html_pi_detalle_casa):
+    detalle = parsear_detalle(html_pi_detalle_casa, anio_actual=2020)
+    assert detalle["anio_construccion"] == 1966  # 2020 - 54
 
 
 def test_parsear_detalle_casa(html_pi_detalle_casa):
@@ -75,3 +86,25 @@ def test_parsear_detalle_precio_desde_jsonld():
     assert detalle["precio_valor"] == 3824.0
     assert detalle["precio_moneda"] == "UF"
     assert detalle["comuna"] is None
+
+
+def test_parsear_detalle_precio_malformado_no_rompe():
+    """Un precio no numérico cae a None en vez de lanzar ValueError."""
+    estado = {
+        "schema": [
+            {
+                "@type": "Product",
+                "name": "Casa",
+                "offers": {"price": "no-es-numero", "priceCurrency": "CLP"},
+            }
+        ]
+    }
+    payload = {"appProps": {"pageProps": {"initialState": estado}}}
+    html = (
+        '<html><script id="__NORDIC_RENDERING_CTX__">'
+        f"_n.ctx.r={json.dumps(payload)};"
+        "_n.ctx.r.assets.manifest=new Map([]);</script></html>"
+    )
+    detalle = parsear_detalle(html)
+    assert detalle["precio_valor"] is None
+    assert detalle["precio_moneda"] == "CLP"

@@ -191,3 +191,11 @@ def test_parsear_tarjetas_comuna_ultimo_segmento():
 
 def test_parsear_tarjetas_sin_resultados():
     assert parsear_tarjetas("<html></html>", CATEGORIA) == []
+
+
+def test_parsear_tarjetas_precio_malformado_no_rompe():
+    """Un precio no numérico cae a None en vez de lanzar ValueError."""
+    estado = {"results": [_polycard(precio="no-es-numero")]}
+    tarjeta = parsear_tarjetas(_html_con_estado(estado), CATEGORIA)[0]
+    assert tarjeta["precio_valor"] is None
+    assert tarjeta["precio_texto"] is None

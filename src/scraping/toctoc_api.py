@@ -16,11 +16,17 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 
 import httpx
 
+from src.scraping.cliente_http import reintentar_http
+
 logger = logging.getLogger(__name__)
+
+
+class ErrorToken(Exception):
+    """No se pudo obtener el token de sesión de TOCTOC."""
+
 
 URL_RESULTADOS = "https://www.toctoc.com/resultados/lista/compra"
 URL_GET_PROPS = "https://www.toctoc.com/api/mapa/GetProps"
@@ -32,9 +38,6 @@ OPERACIONES = {"venta": 1, "arriendo": 2}
 # las usadas (avisos individuales): los proyectos tienen precio "desde" y
 # specs en rangos (misma decisión que Portal Inmobiliario).
 ESTADO_USADAS = 2
-
-MAX_REINTENTOS = 3
-ESPERA_BACKOFF_BASE = 5.0  # segundos
 
 # Cuerpo del POST observado en el navegador; los campos de tipo de propiedad
 # y superficie no filtran (el API los ignora): el filtro por tipo se hace por
@@ -89,7 +92,10 @@ def obtener_token(cliente: httpx.Client) -> str:
         raise ValueError("No se encontró el script react-engine-props")
     inicio_json = respuesta.text.find(">", inicio) + 1
     fin_json = respuesta.text.find("</script>", inicio_json)
-    datos = json.loads(respuesta.text[inicio_json:fin_json])
+    try:
+        datos = json.loads(respuesta.text[inicio_json:fin_json])
+    except json.JSONDecodeError as error:
+        raise ErrorToken("No se pudo parsear el script react-engine-props") from error
     token = datos.get("token")
     if not token:
         raise ValueError("La página no trae token de sesión")
@@ -105,13 +111,18 @@ def buscar(
 ) -> dict:
     """Página `pagina` de resultados del buscador, como dict.
 
-    Reintenta con backoff exponencial ante 429/5xx, como descargar() de
-    cliente_http (que es GET-only; esta es la variante POST).
+    Reusa el reintento/backoff y la taxonomía de errores de cliente_http
+    (reintentar_http: 403 y 429/5xx agotados -> ErrorBloqueo).
     """
-    cuerpo = {**CUERPO_BUSQUEDA, "operacion": OPERACIONES[operacion], "estado": estado}
-    cuerpo["pagina"] = pagina
-    for intento in range(1, MAX_REINTENTOS + 1):
-        respuesta = cliente.post(
+    cuerpo = {
+        **CUERPO_BUSQUEDA,
+        "operacion": OPERACIONES[operacion],
+        "estado": estado,
+        "pagina": pagina,
+    }
+
+    def realizar() -> httpx.Response:
+        return cliente.post(
             URL_GET_PROPS,
             json=cuerpo,
             headers={
@@ -120,20 +131,7 @@ def buscar(
                 "Accept": "application/json",
             },
         )
-        if respuesta.status_code in (429, 500, 502, 503):
-            espera = ESPERA_BACKOFF_BASE * (2 ** (intento - 1))
-            logger.warning(
-                "HTTP %d en búsqueda %s pág %d; reintento %d en %.0fs",
-                respuesta.status_code,
-                operacion,
-                pagina,
-                intento,
-                espera,
-            )
-            time.sleep(espera)
-            continue
-        respuesta.raise_for_status()
-        return respuesta.json()
-    raise httpx.HTTPError(
-        f"Sin éxito tras {MAX_REINTENTOS} reintentos en {URL_GET_PROPS}"
-    )
+
+    respuesta = reintentar_http(f"búsqueda {operacion} pág {pagina}", realizar)
+    respuesta.raise_for_status()
+    return respuesta.json()

@@ -29,6 +29,7 @@ from typing import Any
 from src.scraping.numeros import (
     a_booleano_si_no,
     a_entero,
+    a_flotante,
     bodega_desde_valor,
     formatear_precio,
     parsear_m2,
@@ -41,10 +42,8 @@ ETIQUETAS_CARACTERISTICAS = {
     "baños": "banos",
     "superf. útil": "m2_construida",
     "superf. terreno": "m2_totales",
-    "superf. terraza": "m2_terraza",
     "gastos comunes": "gastos_comunes",
     "estacionamientos": "estacionamientos",
-    "cantidad de pisos": "cantidad_pisos",
     "piso": "piso",
     "año de construcción": "anio_construccion",
     "antigüedad": "antiguedad",
@@ -134,7 +133,7 @@ def _parsear_bodega(valor: str | None) -> bool | None:
     return bodega_desde_valor(valor)
 
 
-def parsear_ficha(html: str) -> dict:
+def parsear_ficha(html: str, anio_actual: int | None = None) -> dict:
     """Extrae los campos de la ficha de un aviso.
 
     Las claves con dato ausente vienen en None; el orquestador hace merge
@@ -148,8 +147,8 @@ def parsear_ficha(html: str) -> dict:
     operacion = data.get("operation") or {}
     direccion = data.get("address") or {}
     coordenadas = (direccion.get("location") or {}).get("coordinates") or []
-    latitud = float(coordenadas[1]) if len(coordenadas) > 1 else None
-    longitud = float(coordenadas[0]) if coordenadas else None
+    latitud = a_flotante(coordenadas[1]) if len(coordenadas) > 1 else None
+    longitud = a_flotante(coordenadas[0]) if coordenadas else None
 
     precio_valor, precio_moneda = _detectar_moneda(
         data.get("price"), data.get("priceUf"), data.get("UF")
@@ -161,7 +160,9 @@ def parsear_ficha(html: str) -> dict:
     if anio is None:  # "Antigüedad: 25 años" -> año estimado
         antiguedad = a_entero(caracteristicas.get("antiguedad"))
         if antiguedad is not None:
-            anio = datetime.now().year - antiguedad
+            if anio_actual is None:
+                anio_actual = datetime.now().year
+            anio = anio_actual - antiguedad
 
     texto_operacion = str(operacion.get("operation") or "")
     precio_texto = formatear_precio(precio_valor, precio_moneda)

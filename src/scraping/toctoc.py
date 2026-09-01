@@ -29,7 +29,7 @@ from pathlib import Path
 import httpx
 
 from src.scraping import base
-from src.scraping.toctoc_api import buscar, obtener_token
+from src.scraping.toctoc_api import ErrorToken, buscar, obtener_token
 from src.scraping.toctoc_ficha import parsear_ficha
 from src.scraping.toctoc_listado import (
     CATEGORIAS_PRINCIPALES,
@@ -47,39 +47,10 @@ def parsear_argumentos(argv: list[str] | None = None) -> argparse.Namespace:
         prog="src.scraping.toctoc",
         description="Scraper de TOCTOC (manual/local).",
     )
-    parser.add_argument(
-        "--categorias",
-        nargs="+",
-        default=list(CATEGORIAS_PRINCIPALES.values()),
-        metavar="SLUG",
-        help="Slugs de categoría a scrapear (default: las 4 principales).",
-    )
-    parser.add_argument(
-        "--max-paginas",
-        type=int,
-        default=5,
-        help="Máximo de páginas del buscador por operación (default: 5).",
-    )
-    parser.add_argument(
-        "--max-detalles",
-        type=int,
-        default=100,
-        help="Máximo de fichas por corrida; 0 las omite (default: 100).",
-    )
-    parser.add_argument(
-        "--delay",
-        type=float,
-        default=2.0,
-        help="Delay base en segundos entre requests (default: 2.0).",
-    )
-    parser.add_argument(
-        "--reparsear",
-        metavar="RUN_ID",
-        default=None,
-        help=(
-            "Regenera el parquet desde los snapshots guardados de esa corrida "
-            "(sin red) y lo escribe en un run_id nuevo; omite el scraping."
-        ),
+    base.agregar_argumentos_comunes(
+        parser,
+        categorias=list(CATEGORIAS_PRINCIPALES.values()),
+        help_max_paginas="Máximo de páginas del buscador por operación (default: 5).",
     )
     return parser.parse_args(argv)
 
@@ -98,10 +69,12 @@ def _operaciones_necesarias(categorias: list[str]) -> list[str]:
 
 class ScraperToctoc(base.ScraperBase):
     nombre = "toctoc"
-    directorio_raw = Path("data/raw/toctoc")
+    directorio_raw = base.RAIZ_PROYECTO / "data" / "raw" / "toctoc"
     proteger_url_en_ficha = True
     patron_listado = "listado_*.json.gz"
-    clases_aborto = (base.ErrorBloqueo, KeyboardInterrupt, ValueError)
+    # ErrorToken se usa solo para la obtención del token (no enmascara errores
+    # de parsers, a diferencia de un ValueError genérico).
+    clases_aborto = (base.ErrorBloqueo, KeyboardInterrupt, ErrorToken)
 
     def _preparar(self, args, cliente):
         self.token = obtener_token(cliente)
@@ -122,12 +95,21 @@ class ScraperToctoc(base.ScraperBase):
                 logger.info("Buscador %s página %d", operacion, pagina)
                 try:
                     respuesta = buscar(cliente, self.token, operacion, pagina)
-                except httpx.HTTPStatusError as error:
-                    logger.error(
-                        "Búsqueda no disponible (HTTP %d); "
-                        "se pasa a la siguiente operación",
-                        error.response.status_code,
-                    )
+                except httpx.HTTPError as error:
+                    if isinstance(error, httpx.HTTPStatusError):
+                        logger.error(
+                            "Búsqueda no disponible (HTTP %d); "
+                            "se pasa a la siguiente operación",
+                            error.response.status_code,
+                        )
+                    else:
+                        logger.warning(
+                            "Error de red en la búsqueda %s página %d (%s); "
+                            "se omite la operación",
+                            operacion,
+                            pagina,
+                            error,
+                        )
                     break
                 base.guardar_gzip(
                     directorio_html / f"listado_{operacion}_p{pagina}.json.gz",
@@ -170,9 +152,7 @@ class ScraperToctoc(base.ScraperBase):
 
 def main(argv: list[str] | None = None) -> None:
     args = parsear_argumentos(argv)
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
-    )
+    base.configurar_logging()
     ScraperToctoc().main(args)
 
 

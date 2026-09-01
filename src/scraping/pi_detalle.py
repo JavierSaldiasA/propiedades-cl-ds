@@ -30,6 +30,7 @@ from datetime import datetime
 from typing import Any
 
 from src.scraping.numeros import (
+    MONEDAS,
     a_booleano_si_no,
     a_entero,
     a_flotante,
@@ -38,9 +39,6 @@ from src.scraping.numeros import (
     parsear_m2,
 )
 from src.scraping.pi_nordic import extraer_estado_inicial
-
-# La UF llega como "CLF" (código ISO 4217 de Mercado Libre).
-MONEDAS = {"CLF": "UF"}
 
 
 def _buscar_componente(nodo: Any, id_componente: str) -> dict[str, Any] | None:
@@ -78,7 +76,7 @@ def _parsear_precio(estado: dict[str, Any]) -> tuple[float | None, str | None]:
                 valor = oferta.get("price")
                 moneda = oferta.get("priceCurrency")
     return (
-        float(valor) if valor is not None else None,
+        a_flotante(valor),
         MONEDAS.get(moneda, moneda),
     )
 
@@ -145,17 +143,21 @@ def _parsear_bodega(atributos: dict[str, str]) -> bool | None:
     return None
 
 
-def _parsear_anio_construccion(texto: str | None) -> int | None:
+def _parsear_anio_construccion(
+    texto: str | None, anio_actual: int | None = None
+) -> int | None:
     """ "Antigüedad: 54 años" -> año de construcción estimado."""
     if not texto:
         return None
     coincidencia = re.search(r"\d+", texto)
     if not coincidencia:
         return None
-    return datetime.now().year - int(coincidencia.group())
+    if anio_actual is None:
+        anio_actual = datetime.now().year
+    return anio_actual - int(coincidencia.group())
 
 
-def parsear_detalle(html: str) -> dict:
+def parsear_detalle(html: str, anio_actual: int | None = None) -> dict:
     """Extrae los campos de la página de detalle de un aviso.
 
     Las claves con dato ausente vienen en None; el orquestador hace merge
@@ -182,7 +184,9 @@ def parsear_detalle(html: str) -> dict:
         "m2_construida": parsear_m2(atributos.get("Superficie útil")),
         "m2_totales": parsear_m2(atributos.get("Superficie total")),
         "gastos_comunes": a_flotante_cl(atributos.get("Gastos comunes")),
-        "anio_construccion": _parsear_anio_construccion(atributos.get("Antigüedad")),
+        "anio_construccion": _parsear_anio_construccion(
+            atributos.get("Antigüedad"), anio_actual=anio_actual
+        ),
         "piso": a_entero(atributos.get("Número de piso de la unidad")),
         "piscina": a_booleano_si_no(atributos.get("Piscina")),
         "latitud": latitud,

@@ -15,13 +15,16 @@ parser de detalle usa); el resto —columnas, tipos, merge, manejo de errores,
 
 from __future__ import annotations
 
+import argparse
 import gzip
 import logging
 from datetime import date, datetime
 from pathlib import Path
 
+import httpx
 import pandas as pd
 
+from src.paths import RAIZ_PROYECTO
 from src.scraping.cliente_http import (
     ErrorBloqueo,
     crear_cliente,
@@ -160,11 +163,14 @@ class ScraperBase:
     """
 
     nombre: str = "base"
-    directorio_raw = Path("data/raw/base")
+    directorio_raw = RAIZ_PROYECTO / "data" / "raw" / "base"
     proteger_url_en_ficha: bool = False
     patron_listado = "listado_*.html.gz"
-    # Errores que abortan la corrida conservando el parquet parcial.
-    clases_aborto: tuple = (ErrorBloqueo, KeyboardInterrupt)
+    # Errores que abortan la corrida conservando el parquet parcial. Los
+    # HTTPStatusError (aviso/listado no disponible) y los errores de red se
+    # manejan dentro del flujo sin abortar (ver _scrapear_listados_por_url y
+    # _scrapear_detalles).
+    clases_aborto: tuple[type[Exception], ...] = (ErrorBloqueo, KeyboardInterrupt)
 
     # --- a implementar por cada fuente ------------------------------------
 
@@ -204,9 +210,21 @@ class ScraperBase:
                 logger.info("Listado %s página %d: %s", categoria, pagina, url)
                 try:
                     html = descargar(url, cliente)
-                except Exception as error:
-                    if not self._log_http_listado(error, categoria):
-                        raise
+                except ErrorBloqueo:
+                    raise  # aborte limpio, conservando el parquet parcial
+                except httpx.HTTPStatusError as error:
+                    logger.error(
+                        "Listado no disponible (HTTP %d); se pasa a la siguiente "
+                        "categoría",
+                        error.response.status_code,
+                    )
+                    break
+                except httpx.HTTPError as error:
+                    logger.warning(
+                        "Error de red en %s (%s); se omite la categoría",
+                        url,
+                        error,
+                    )
                     break
                 guardar_gzip(
                     directorio_html / f"listado_{categoria}_p{pagina}.html.gz", html
@@ -227,22 +245,6 @@ class ScraperBase:
                 if url and pagina < args.max_paginas:
                     esperar(args.delay)
 
-    @staticmethod
-    def _log_http_listado(error: Exception, categoria: str) -> bool:
-        """Log de un fallo HTTP de listado; False si no es un HTTPStatusError.
-
-        Devuelve True si el error se manejó (HTTP con status) y False si debe
-        propagarse (otro tipo de error).
-        """
-        respuesta = getattr(error, "response", None)
-        if respuesta is None:
-            return False
-        logger.error(
-            "Listado no disponible (HTTP %d); se pasa a la siguiente categoría",
-            respuesta.status_code,
-        )
-        return True
-
     # --- esqueleto compartido ---------------------------------------------
 
     def _scrapear_detalles(self, args, cliente, directorio_html, registros) -> None:
@@ -251,7 +253,17 @@ class ScraperBase:
             logger.info(
                 "Detalle %d/%d: %s", indice, len(candidatos), registro["url_origen"]
             )
-            html = descargar_aviso(registro["url_origen"], cliente)
+            try:
+                html = descargar_aviso(registro["url_origen"], cliente)
+            except ErrorBloqueo:
+                raise  # aborte limpio, conservando el parquet parcial
+            except httpx.HTTPError as error:
+                logger.warning(
+                    "Error de red en detalle %s (%s); se conserva la tarjeta",
+                    registro["adid"],
+                    error,
+                )
+                continue
             if html is None:  # aviso dado de baja entre listado y detalle
                 continue
             guardar_gzip(directorio_html / f"detalle_{registro['adid']}.html.gz", html)
@@ -347,3 +359,73 @@ class ScraperBase:
             escribir_parquet(registros, directorio_salida)
 
         logger.info("Listo: %d avisos únicos en %s", len(registros), directorio_salida)
+
+
+# ---------------------------------------------------------------------------
+# Esqueleto compartido de los tres scrapers (argumentos CLI y logging).
+# ---------------------------------------------------------------------------
+
+# Textos de ayuda comunes; las fuentes pueden pasar variantes por fuente.
+_AYUDA_CATEGORIAS = "Slugs de categoría a scrapear (default: las 4 principales)."
+_AYUDA_MAX_PAGINAS = "Máximo de páginas de listado por categoría (default: 5)."
+_AYUDA_MAX_DETALLES = (
+    "Máximo de páginas de detalle por corrida; 0 las omite (default: 100)."
+)
+_AYUDA_DELAY = "Delay base en segundos entre requests (default: 2.0)."
+_AYUDA_REPARSEAR = (
+    "Regenera el parquet desde los snapshots guardados de esa corrida "
+    "(sin red) y lo escribe en un run_id nuevo; omite el scraping."
+)
+
+
+def agregar_argumentos_comunes(
+    parser: argparse.ArgumentParser,
+    categorias: list[str],
+    help_categorias: str = _AYUDA_CATEGORIAS,
+    help_max_paginas: str = _AYUDA_MAX_PAGINAS,
+) -> None:
+    """Argumentos CLI idénticos en Yapo, Portal Inmobiliario y TOCTOC."""
+    parser.add_argument(
+        "--categorias",
+        nargs="+",
+        default=categorias,
+        metavar="SLUG",
+        help=help_categorias,
+    )
+    parser.add_argument(
+        "--max-paginas",
+        type=int,
+        default=5,
+        help=help_max_paginas,
+    )
+    parser.add_argument(
+        "--max-detalles",
+        type=int,
+        default=100,
+        help=_AYUDA_MAX_DETALLES,
+    )
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=2.0,
+        help=_AYUDA_DELAY,
+    )
+    parser.add_argument(
+        "--reparsear",
+        metavar="RUN_ID",
+        default=None,
+        help=_AYUDA_REPARSEAR,
+    )
+
+
+def configurar_logging() -> None:
+    """Logging de consola estándar de los scrapers (INFO a stderr)."""
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
+
+
+def slug_desde_ruta(ruta: Path) -> str:
+    """'listado_<slug>_p1.html.gz' -> '<slug>'."""
+    nombre = Path(ruta.stem).stem  # quita .gz, .html
+    return nombre.replace("listado_", "").split("_p")[0]

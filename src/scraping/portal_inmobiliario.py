@@ -19,7 +19,6 @@ snapshots guardados, sin tocar la red.
 from __future__ import annotations
 
 import argparse
-import logging
 from pathlib import Path
 
 from src.scraping import base
@@ -39,42 +38,13 @@ def parsear_argumentos(argv: list[str] | None = None) -> argparse.Namespace:
         prog="src.scraping.portal_inmobiliario",
         description="Scraper de Portal Inmobiliario (manual/local).",
     )
-    parser.add_argument(
-        "--categorias",
-        nargs="+",
-        default=list(CATEGORIAS_PRINCIPALES),
-        metavar="SLUG",
-        help=(
+    base.agregar_argumentos_comunes(
+        parser,
+        categorias=list(CATEGORIAS_PRINCIPALES),
+        help_categorias=(
             "Slugs de categoría a scrapear (default: las 4 principales). "
             "También acepta rutas custom, ej. "
             "venta/casa/propiedades-usadas/metropolitana."
-        ),
-    )
-    parser.add_argument(
-        "--max-paginas",
-        type=int,
-        default=5,
-        help="Máximo de páginas de listado por categoría (default: 5).",
-    )
-    parser.add_argument(
-        "--max-detalles",
-        type=int,
-        default=100,
-        help="Máximo de páginas de detalle por corrida; 0 las omite (default: 100).",
-    )
-    parser.add_argument(
-        "--delay",
-        type=float,
-        default=2.0,
-        help="Delay base en segundos entre requests (default: 2.0).",
-    )
-    parser.add_argument(
-        "--reparsear",
-        metavar="RUN_ID",
-        default=None,
-        help=(
-            "Regenera el parquet desde los snapshots guardados de esa corrida "
-            "(sin red) y lo escribe en un run_id nuevo; omite el scraping."
         ),
     )
     return parser.parse_args(argv)
@@ -82,13 +52,13 @@ def parsear_argumentos(argv: list[str] | None = None) -> argparse.Namespace:
 
 class ScraperPortalInmobiliario(base.ScraperBase):
     nombre = "portal_inmobiliario"
-    directorio_raw = Path("data/raw/portal_inmobiliario")
+    directorio_raw = base.RAIZ_PROYECTO / "data" / "raw" / "portal_inmobiliario"
 
     def parsear_detalle(self, html: str) -> dict:
         return parsear_detalle(html)
 
     def _leer_listado(self, ruta: Path) -> list[dict]:
-        return parsear_tarjetas(base.leer_gzip(ruta), _slug_desde_ruta(ruta))
+        return parsear_tarjetas(base.leer_gzip(ruta), base.slug_desde_ruta(ruta))
 
     def _scrapear_listados(self, args, cliente, directorio_html, registros) -> None:
         self._scrapear_listados_por_url(
@@ -103,17 +73,9 @@ class ScraperPortalInmobiliario(base.ScraperBase):
         )
 
 
-def _slug_desde_ruta(ruta: Path) -> str:
-    """'listado_<slug>_p1.html.gz' -> '<slug>'."""
-    nombre = Path(ruta.stem).stem  # quita .gz, .html
-    return nombre.replace("listado_", "").split("_p")[0]
-
-
 def main(argv: list[str] | None = None) -> None:
     args = parsear_argumentos(argv)
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
-    )
+    base.configurar_logging()
     ScraperPortalInmobiliario().main(args)
 
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import random
 import time
+from typing import Callable
 
 import httpx
 
@@ -44,27 +45,36 @@ def esperar(delay: float) -> None:
     time.sleep(random.uniform(delay, delay * 2))
 
 
-def descargar(url: str, cliente: httpx.Client) -> str:
-    """Descarga una URL y devuelve el HTML como texto.
+def _espera_backoff(intento: int) -> float:
+    """Backoff exponencial para el reintento `intento` (1-index)."""
+    return ESPERA_BACKOFF_BASE * (2 ** (intento - 1))
 
-    Reintenta con backoff exponencial ante 429/5xx y errores de red.
-    Lanza ErrorBloqueo ante 403 o si se agotan los reintentos por HTTP 429/5xx.
+
+def reintentar_http(url: str, realizar: Callable[[], httpx.Response]) -> httpx.Response:
+    """Ejecuta `realizar` (GET o POST) con reintentos y backoff exponencial.
+
+    - HTTP 403 -> ErrorBloqueo (anti-bot, no se reintenta).
+    - HTTP 429/5xx -> se reintenta; si se agotan -> ErrorBloqueo.
+    - Errores de red (httpx.HTTPError) -> se reintentan; si persisten, se
+      relanza la excepción original (no es un bloqueo anti-bot).
+
+    Devuelve la respuesta; el llamante decide (raise_for_status, .json()...).
     """
     for intento in range(1, MAX_REINTENTOS + 1):
         try:
-            respuesta = cliente.get(url)
+            respuesta = realizar()
         except httpx.HTTPError as error:
             logger.warning("Error de red en %s (intento %d): %s", url, intento, error)
             if intento == MAX_REINTENTOS:
                 raise
-            time.sleep(ESPERA_BACKOFF_BASE * intento)
+            time.sleep(_espera_backoff(intento))
             continue
         if respuesta.status_code == 403:
             raise ErrorBloqueo(f"Bloqueo anti-bot en {url} (HTTP 403)")
         if respuesta.status_code in (429, 500, 502, 503):
             if intento == MAX_REINTENTOS:
                 break  # sin éxito: no esperar para rendirse
-            espera = ESPERA_BACKOFF_BASE * (2 ** (intento - 1))
+            espera = _espera_backoff(intento)
             logger.warning(
                 "HTTP %d en %s; reintento %d en %.0fs",
                 respuesta.status_code,
@@ -74,9 +84,20 @@ def descargar(url: str, cliente: httpx.Client) -> str:
             )
             time.sleep(espera)
             continue
-        respuesta.raise_for_status()
-        return respuesta.text
+        return respuesta
     raise ErrorBloqueo(f"Sin éxito tras {MAX_REINTENTOS} reintentos en {url}")
+
+
+def descargar(url: str, cliente: httpx.Client) -> str:
+    """Descarga una URL y devuelve el HTML como texto.
+
+    Reintenta con backoff exponencial ante 429/5xx y errores de red
+    (reintentar_http). Lanza ErrorBloqueo ante 403 o si se agotan los
+    reintentos por HTTP 429/5xx.
+    """
+    respuesta = reintentar_http(url, lambda: cliente.get(url))
+    respuesta.raise_for_status()
+    return respuesta.text
 
 
 def descargar_aviso(url: str, cliente: httpx.Client) -> str | None:

@@ -33,7 +33,9 @@ from __future__ import annotations
 from typing import Any
 
 from src.scraping.numeros import (
+    MONEDAS,
     a_entero,
+    a_flotante,
     formatear_precio,
     parsear_m2,
 )
@@ -67,9 +69,6 @@ DOMINIOS_INDIVIDUALES = (
     "MLC-HOUSES_FOR_RENT",
     "MLC-APARTMENTS_FOR_RENT",
 )
-
-# La UF llega como "CLF" (código ISO 4217 de Mercado Libre).
-MONEDAS = {"CLF": "UF"}
 
 
 def ruta_listado(categoria_slug: str) -> str:
@@ -166,7 +165,7 @@ def _parsear_polycard(polycard: dict[str, Any], categoria_slug: str) -> dict | N
     valor = actual.get("value", señal.get("price"))
     moneda = actual.get("currency", señal.get("currency"))
     precio_moneda = MONEDAS.get(moneda, moneda)
-    precio_valor = float(valor) if valor is not None else None
+    precio_valor = a_flotante(valor)
 
     ubicacion = _cuerpo(componentes, "location").get("text")
     comuna = None

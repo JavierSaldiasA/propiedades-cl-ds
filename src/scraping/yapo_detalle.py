@@ -21,15 +21,12 @@ from datetime import date, datetime
 from bs4 import BeautifulSoup
 
 from src.scraping.numeros import (
+    MONEDAS,
     a_booleano_si_no,
     a_entero,
     a_flotante,
     parsear_numero_cl,
 )
-
-# Yapo usa códigos ISO 4217 en el JSON-LD: la UF aparece como "CLF".
-# Se normaliza al vocabulario del proyecto ("UF"/"CLP", ver schema.sql).
-MONEDAS_JSONLD = {"CLF": "UF"}
 
 
 def _parsear_jsonld(sopa: BeautifulSoup) -> dict:
@@ -135,8 +132,8 @@ def parsear_detalle(html: str) -> dict:
 
     return {
         "titulo": jsonld.get("name"),
-        "precio_valor": float(precio) if precio is not None else None,
-        "precio_moneda": MONEDAS_JSONLD.get(moneda, moneda),
+        "precio_valor": a_flotante(precio),
+        "precio_moneda": MONEDAS.get(moneda, moneda),
         "comuna": comuna or _localidad_jsonld(oferta),
         "region": region,
         "descripcion": (

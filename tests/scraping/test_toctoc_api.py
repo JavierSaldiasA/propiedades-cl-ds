@@ -3,8 +3,15 @@
 import json
 
 import httpx
+import pytest
 
-from src.scraping.toctoc_api import OPERACIONES, buscar, obtener_token
+from src.scraping.cliente_http import ErrorBloqueo
+from src.scraping.toctoc_api import (
+    OPERACIONES,
+    ErrorToken,
+    buscar,
+    obtener_token,
+)
 
 PAGINA = (
     '<html><script id="react-engine-props" type="application/json">'
@@ -63,3 +70,52 @@ def test_buscar_cuerpo_por_operacion():
     assert cuerpos[0]["pagina"] == 1
     assert cuerpos[1]["operacion"] == OPERACIONES["arriendo"]
     assert cuerpos[1]["pagina"] == 2
+
+
+def test_obtener_token_malformado_lanza_error_token():
+    pagina = (
+        '<html><script id="react-engine-props" type="application/json">'
+        "no-es-json"
+        "</script></html>"
+    )
+    with _cliente_mock(pagina=pagina) as cliente:
+        with pytest.raises(ErrorToken):
+            obtener_token(cliente)
+
+
+def test_buscar_403_lanza_bloqueo(monkeypatch):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(403)
+
+    monkeypatch.setattr("src.scraping.cliente_http.time.sleep", lambda segundos: None)
+    with httpx.Client(transport=httpx.MockTransport(handler)) as cliente:
+        with pytest.raises(ErrorBloqueo):
+            buscar(cliente, "t", "venta", 1)
+
+
+def test_buscar_agota_5xx_lanza_bloqueo(monkeypatch):
+    llamadas = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        llamadas["n"] += 1
+        return httpx.Response(500)
+
+    monkeypatch.setattr("src.scraping.cliente_http.time.sleep", lambda segundos: None)
+    with httpx.Client(transport=httpx.MockTransport(handler)) as cliente:
+        with pytest.raises(ErrorBloqueo):
+            buscar(cliente, "t", "venta", 1)
+    assert llamadas["n"] == 3
+
+
+def test_buscar_error_de_red_relanza_y_reintenta(monkeypatch):
+    llamadas = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        llamadas["n"] += 1
+        raise httpx.ConnectError("red caída")
+
+    monkeypatch.setattr("src.scraping.cliente_http.time.sleep", lambda segundos: None)
+    with httpx.Client(transport=httpx.MockTransport(handler)) as cliente:
+        with pytest.raises(httpx.ConnectError):
+            buscar(cliente, "t", "venta", 1)
+    assert llamadas["n"] == 3
