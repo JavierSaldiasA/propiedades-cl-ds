@@ -1,0 +1,13 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      # Misma variable que .env.example; pásala vía .env (gitignored) o sobre-la-fila.
+      URL_DATABASE: ${URL_DATABASE}
+      USUARIO_BCCH: ${USUARIO_BCCH}
+      PASSWORD_BCCH: ${PASSWORD_BCCH}
+    ports:
+      - "8000:8000"
+    restart: unless-stopped

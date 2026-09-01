@@ -1,6 +1,3 @@
--r requirements.txt
-
-pytest
-black
-ruff
-ipykernel
+# Herramientas de desarrollo. Incluye -r requirements.txt (runtime) vía el extra [dev].
+# Para desarrollo: pip install -r requirements-dev.txt
+-e .[dev]

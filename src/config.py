@@ -7,10 +7,14 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from src.paths import RAIZ_PROYECTO
+
 
 class Configuraciones(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+        env_file=RAIZ_PROYECTO / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
     )
 
     url_database: str

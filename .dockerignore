@@ -1,0 +1,38 @@
+# Entorno y credenciales
+.venv/
+.env
+
+# Git / IDE
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Cachés
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# Paquetes/builds
+*.egg-info/
+build/
+dist/
+
+# Datos crudos y notebooks (no van a la imagen)
+data/
+notebooks/
+contexto/
+models/*.pkl
+models/*.joblib
+
+# Logs
+*.log
+
+# Docker
+Dockerfile
+docker-compose.yml

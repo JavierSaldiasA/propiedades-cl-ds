@@ -12,7 +12,7 @@ scraping (ver src/scraping/base.COLUMNAS) más las derivadas del ETL
 
 from __future__ import annotations
 
-from pathlib import Path
+from src.paths import RAIZ_PROYECTO
 
 # Columnas de la tabla `properties`, en orden, sin `id` (BIGSERIAL).
 COLUMNAS_PROPERTIES = [
@@ -105,4 +105,4 @@ def generar_schema() -> str:
 
 
 # Ruta canónica del schema aplicable a la BD.
-RUTA_SCHEMA = Path("docker/db/schema.sql")
+RUTA_SCHEMA = RAIZ_PROYECTO / "docker" / "db" / "schema.sql"

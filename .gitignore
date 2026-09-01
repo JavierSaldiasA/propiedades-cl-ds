@@ -7,14 +7,33 @@ __pycache__/
 # Pytest y Ruff
 .pytest_cache/
 .ruff_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.pylint.d/
 
 # Entorno virtual y credenciales
 .venv/
 .env
+.streamlit/secrets.toml
 
-# Documentos extra
+# Builds
+build/
+dist/
+.eggs/
+*.egg
+*.egg-info/
+
+# Logs
+*.log
+
+# Documentos extra (contexto/ queda solo en local, no se versiona)
 contexto/
 contexto/*.md
+
+# IDE
+.idea/
+*.swp
 
 # Datos: snapshots y datasets no se suben al repo
 data/raw/*
