@@ -79,6 +79,26 @@ def test_normalizar_precios_valor_faltante():
     assert pd.isna(df["precio_clp_normalizado"][0])
 
 
+def test_normalizar_precios_fecha_anterior_al_rango_y_moneda_desconocida():
+    """La conversión vectorizada respeta asof (antes del inicio -> NA) y
+    monedas fuera de UF/CLP -> NA, igual que la versión por filas."""
+    fechas_uf = pd.Series([40000.0], index=pd.to_datetime(["2026-08-01"]))
+    df = pd.DataFrame(
+        {
+            "precio_valor": pd.array([100.0, 200.0, 300.0], dtype="Float64"),
+            "precio_moneda": ["UF", "UF", "USD"],
+            "fecha_publicacion": pd.to_datetime(
+                ["2026-07-31", "2026-08-01", "2026-08-01"]
+            ),
+            "fecha_scraping": pd.to_datetime(["2026-08-01"] * 3),
+        }
+    )
+    df = normalizar_precios(df, fechas_uf)
+    assert pd.isna(df["precio_clp_normalizado"][0])  # antes de la serie
+    assert df["precio_clp_normalizado"][1] == 8_000_000.0
+    assert pd.isna(df["precio_clp_normalizado"][2])  # moneda desconocida
+
+
 def test_normalizar_precios_anula_error_de_moneda():
     """Monto CLP tipeado con moneda UF (caso real Yapo 32850692) -> NA."""
     df = _df_crudo()

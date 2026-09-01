@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import logging
 
+import numpy as np
 import pandas as pd
 
 from src.etl.esquema import COLUMNAS_PROPERTIES
-from src.etl.uf import convertir_a_clp
 
 logger = logging.getLogger(__name__)
 
@@ -61,15 +61,19 @@ def normalizar_precios(df: pd.DataFrame, serie_uf: pd.Series) -> pd.DataFrame:
     df = _anular_precios_implausibles(df)
     df = df.copy()
     fechas = df["fecha_publicacion"].fillna(df["fecha_scraping"])
-    df["precio_clp_normalizado"] = pd.array(
-        [
-            convertir_a_clp(valor, moneda, fecha, serie_uf)
-            for valor, moneda, fecha in zip(
-                df["precio_valor"], df["precio_moneda"], fechas
-            )
-        ],
-        dtype="Float64",
-    )
+    precio = pd.to_numeric(df["precio_valor"], errors="coerce").to_numpy()
+    es_clp = (df["precio_moneda"] == "CLP").to_numpy()
+    es_uf = (df["precio_moneda"] == "UF").to_numpy()
+    # UF de cada fila por búsqueda posicional en la serie ordenada: reproduce
+    # valor_uf_en_fecha (día exacto o el anterior disponible) sin loop de Python.
+    idx_uf = serie_uf.index.searchsorted(fechas.to_numpy(), side="right") - 1
+    uf_por_fila = np.full(len(df), np.nan)
+    validas = idx_uf >= 0
+    uf_por_fila[validas] = serie_uf.to_numpy()[idx_uf[validas]]
+    precio_clp = precio.copy()
+    precio_clp[es_uf] = precio[es_uf] * uf_por_fila[es_uf]
+    precio_clp[~(es_clp | es_uf)] = np.nan  # moneda desconocida
+    df["precio_clp_normalizado"] = pd.array(precio_clp, dtype="Float64")
     return df
 
 

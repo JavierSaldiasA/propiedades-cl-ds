@@ -21,15 +21,16 @@ from src.etl.esquema import RUTA_SCHEMA, generar_schema
 from src.etl.limpieza import transformar
 from src.etl.uf import obtener_serie_uf
 from src.etl.upsert import cargar_properties
+from src.paths import RAIZ_PROYECTO
 
 logger = logging.getLogger(__name__)
 
 # Fuente -> directorio del parquet crudo (los scrapers escriben las
 # mismas columnas, así que el ETL es idéntico para todos).
 DIRECTORIOS_RAW = {
-    "yapo": Path("data/raw/yapo"),
-    "portal_inmobiliario": Path("data/raw/portal_inmobiliario"),
-    "toctoc": Path("data/raw/toctoc"),
+    "yapo": RAIZ_PROYECTO / "data" / "raw" / "yapo",
+    "portal_inmobiliario": RAIZ_PROYECTO / "data" / "raw" / "portal_inmobiliario",
+    "toctoc": RAIZ_PROYECTO / "data" / "raw" / "toctoc",
 }
 
 
@@ -63,6 +64,8 @@ def parsear_argumentos(argv: list[str] | None = None) -> argparse.Namespace:
 
 def _ultimo_run_id(directorio_raw: Path) -> str | None:
     """Corrida más reciente de una fuente, o None si no hay corridas."""
+    if not directorio_raw.exists():
+        return None
     corridas = sorted(
         d.name
         for d in directorio_raw.iterdir()
