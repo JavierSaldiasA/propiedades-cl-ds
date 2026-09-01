@@ -10,57 +10,57 @@ requires-python = ">=3.11,<4"
 readme = "README.md"
 dependencies = [
     # Datos / ETL
-    "numpy~=2.4",
-    "pandas~=3.0",
-    "pyarrow~=24.0",
+    "numpy>=2.4",
+    "pandas>=3.0",
+    "pyarrow>=24.0",
 
     # Scraping (Playwright como fallback opcional, ver [project.optional-dependencies].scraping)
-    "beautifulsoup4~=4.15",
+    "beautifulsoup4>=4.15",
 
     # Indicadores económicos
-    "bcchapi~=1.1",
+    "bcchapi>=1.1",
 
     # Visualización
-    "plotly~=7.0",
+    "plotly>=7.0",
 
     # Base de datos: Supabase Postgres con queries directas
-    "psycopg[binary]~=3.3",
+    "psycopg[binary]>=3.3",
 
     # API
-    "fastapi~=0.140",
-    "uvicorn[standard]~=0.51",
-    "pydantic~=2.13",
-    "pydantic-settings~=2.14",
+    "fastapi>=0.140",
+    "uvicorn[standard]>=0.51",
+    "pydantic>=2.13",
+    "pydantic-settings>=2.14",
 
     # Modelos (y serialización del setup + modelo)
-    "scikit-learn~=1.9",
-    "lightgbm~=4.7",
-    "xgboost~=3.3",
-    "shap~=0.52",
-    "joblib~=1.5",
-    "cloudpickle~=3.1",
+    "scikit-learn>=1.9",
+    "lightgbm>=4.7",
+    "xgboost>=3.3",
+    "shap>=0.52",
+    "joblib>=1.5",
+    "cloudpickle>=3.1",
 
     # Frontend
-    "streamlit~=1.60",
+    "streamlit>=1.60",
 
     # Cliente HTTP (Streamlit → API, y tests de endpoints con TestClient)
-    "httpx~=0.28",
+    "httpx>=0.28",
 ]
 
 [project.optional-dependencies]
 scraping = [
     # Fallback ante anti-bot de los portales (requiere `playwright install chromium`)
-    "playwright~=1.61",
+    "playwright>=1.61",
 ]
 dev = [
-    "pytest~=9.1",
-    "pytest-cov~=6.0",
-    "black~=26.5",
-    "ruff~=0.16",
-    "pre-commit~=4.2",
-    "ipykernel~=7.3",
-    "matplotlib~=3.11",
-    "seaborn~=0.13",
+    "pytest>=9.1",
+    "pytest-cov>=6.0",
+    "black>=26.5",
+    "ruff>=0.16",
+    "pre-commit>=4.2",
+    "ipykernel>=7.3",
+    "matplotlib>=3.11",
+    "seaborn>=0.13",
 ]
 
 [tool.setuptools.packages.find]
